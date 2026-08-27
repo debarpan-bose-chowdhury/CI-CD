@@ -1,0 +1,208 @@
+name: Reusable CI
+
+on:
+  workflow_call:
+    inputs:
+      language:
+        type: string
+        default: auto
+      dotnet-version:
+        type: string
+        default: 8.0.x
+      dotnet-project:
+        type: string
+        default: .
+      dotnet-test-command:
+        type: string
+        default: ''
+      python-version:
+        type: string
+        default: '3.12'
+      python-workdir:
+        type: string
+        default: .
+      python-install-command:
+        type: string
+        default: ''
+      python-test-command:
+        type: string
+        default: ''
+      lint-command:
+        type: string
+        default: ''
+      run-sonarqube:
+        type: boolean
+        default: false
+      sonar-project-key:
+        type: string
+        default: ''
+      sonar-host-url:
+        required: false
+      sonar-token:
+        required: false
+    outputs:
+      detected-language:
+        value: ${{ jobs.detect.outputs.language }}
+      sbom-artifact:
+        value: ${{ jobs.sbom.outputs.sbom-file }}
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      language: ${{ steps.detect.outputs.language }}
+      dotnet: ${{ steps.detect.outputs.dotnet }}
+      python: ${{ steps.detect.outputs.python }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          language='${{ inputs.language }}'
+          dotnet='false'
+          python='false'
+
+          if [ "$language" = 'dotnet' ]; then
+            dotnet='true'
+          elif [ "$language" = 'python' ]; then
+            python='true'
+          elif [ "$language" = 'both' ]; then
+            dotnet='true'
+            python='true'
+          else
+            if find . \( -name '*.sln' -o -name '*.csproj' -o -name 'global.json' -o -name 'Directory.Build.props' \) | grep -q .; then
+              dotnet='true'
+            fi
+            if find . \( -name 'pyproject.toml' -o -name 'requirements*.txt' -o -name 'setup.py' -o -name 'setup.cfg' \) | grep -q .; then
+              python='true'
+            fi
+            if [ "$dotnet" = 'false' ] && [ "$python" = 'false' ]; then
+              echo 'No supported stack detected.' >&2
+              exit 1
+            fi
+          fi
+
+          if [ "$dotnet" = 'true' ] && [ "$python" = 'true' ]; then
+            language='mixed'
+          elif [ "$dotnet" = 'true' ]; then
+            language='dotnet'
+          else
+            language='python'
+          fi
+
+          echo "language=$language" >> "$GITHUB_OUTPUT"
+          echo "dotnet=$dotnet" >> "$GITHUB_OUTPUT"
+          echo "python=$python" >> "$GITHUB_OUTPUT"
+
+  codeql:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: 'cpp,csharp,go,java,javascript,python,ruby'
+      - uses: github/codeql-action/autobuild@v3
+      - uses: github/codeql-action/analyze@v3
+
+  sbom:
+    runs-on: ubuntu-latest
+    outputs:
+      sbom-file: sbom.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: anchore/sbom-action@v0
+        with:
+          format: cyclonedx-json
+          output-file: sbom.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: sbom.json
+          retention-days: 30
+    needs: detect
+    if: needs.detect.outputs.dotnet == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+      - shell: bash
+        working-directory: ${{ inputs.dotnet-project }}
+        run: dotnet restore
+      - shell: bash
+        working-directory: ${{ inputs.dotnet-project }}
+        run: dotnet build --no-restore -c Release
+      - shell: bash
+        working-directory: ${{ inputs.dotnet-project }}
+        run: |
+          if [ -n '${{ inputs.dotnet-test-command }}' ]; then
+            eval '${{ inputs.dotnet-test-command }}'
+          else
+            dotnet test --no-build -c Release --collect:'XPlat Code Coverage'
+          fi
+      - if: ${{ inputs.lint-command != '' }}
+        shell: bash
+        run: ${{ inputs.lint-command }}
+      - if: ${{ inputs.run-sonarqube }}
+       uses: SonarSource/sonarqube-scan-action@master
+       env:
+         SONAR_HOST_URL: ${{ secrets.sonar-host-url }}
+         SONAR_TOKEN: ${{ secrets.sonar-token }}
+       with:
+         args: >
+           -Dsonar.projectKey=${{ inputs.sonar-project-key }}
+           -Dsonar.sources=.
+           -Dsonar.language=cs
+
+  python:
+    needs: detect
+    if: needs.detect.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+      - shell: bash
+        working-directory: ${{ inputs.python-workdir }}
+        run: |
+          python -m pip install --upgrade pip
+          if [ -n '${{ inputs.python-install-command }}' ]; then
+            eval '${{ inputs.python-install-command }}'
+          elif [ -f requirements-dev.txt ]; then
+            pip install -r requirements-dev.txt
+          elif [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            pip install -e .
+          fi
+      - shell: bash
+        working-directory: ${{ inputs.python-workdir }}
+        run: |
+          if [ -n '${{ inputs.python-test-command }}' ]; then
+            eval '${{ inputs.python-test-command }}'
+          else
+            pytest
+          fi
+      - if: ${{ inputs.lint-command != '' }}
+        shell: bash
+        run: ${{ inputs.lint-command }}
+      - if: ${{ inputs.run-sonarqube }}
+       uses: SonarSource/sonarqube-scan-action@master
+       env:
+         SONAR_HOST_URL: ${{ secrets.sonar-host-url }}
+         SONAR_TOKEN: ${{ secrets.sonar-token }}
+       with:
+         args: >
+           -Dsonar.projectKey=${{ inputs.sonar-project-key }}
+           -Dsonar.sources=.
+           -Dsonar.language=py

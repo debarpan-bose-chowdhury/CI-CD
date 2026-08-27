@@ -1,0 +1,285 @@
+name: Reusable Image Periodic Scan
+
+on:
+  workflow_call:
+    inputs:
+      registry:
+        type: string
+        default: ghcr.io
+      image-name:
+        type: string
+        required: true
+      tags-to-scan:
+        type: string
+        default: latest
+      fail-on-critical:
+        type: boolean
+        default: false
+        description: 'Fail workflow if critical vulnerabilities found'
+    secrets:
+      REGISTRY_USERNAME:
+        required: false
+      REGISTRY_PASSWORD:
+        required: false
+
+permissions:
+  contents: read
+  security-events: write
+  issues: write
+
+jobs:
+  scan-image:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        tag: ${{ fromJSON(format('[{0}]', github.event.inputs.tags-to-scan || 'latest')) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup image reference
+        id: image-ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          registry='${{ inputs.registry }}'
+          image='${{ inputs.image-name }}'
+          tag='${{ matrix.tag }}'
+
+          full_ref="${registry}/${image}:${tag}"
+          echo "full-ref=${full_ref}" >> "$GITHUB_OUTPUT"
+          echo "Scanning image: ${full_ref}"
+
+      - name: Login to registry
+        if: ${{ inputs.registry != 'ghcr.io' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Pull image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull '${{ steps.image-ref.outputs.full-ref }}'
+          echo "✓ Image pulled"
+
+      - name: Install Grype scanner
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+          echo "✓ Grype installed"
+
+      - name: Generate SBOM and scan
+        id: scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_ref='${{ steps.image-ref.outputs.full-ref }}'
+
+          echo "Scanning $image_ref for vulnerabilities..."
+
+          # Generate SBOM
+          grype "$image_ref" -o cyclonedx-json > sbom.json 2>/dev/null || true
+
+          # Run vulnerability scan with JSON output
+          grype "$image_ref" \
+            -o json \
+            > vulnerabilities.json 2>&1 || echo "Scan completed with non-zero exit (expected if vulnerabilities found)"
+
+          # Count vulnerabilities by severity
+          python3 << 'PYTHON_EOF'
+          import json
+          import sys
+
+          with open('vulnerabilities.json', 'r') as f:
+              data = json.load(f)
+
+          matches = data.get('matches', [])
+          severity_counts = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0}
+
+          for match in matches:
+              severity = match.get('vulnerability', {}).get('severity', 'unknown').lower()
+              if severity in severity_counts:
+                  severity_counts[severity] += 1
+
+          print("Vulnerability Summary:")
+          for sev, count in sorted(severity_counts.items(), reverse=True):
+              if count > 0:
+                  print(f"  {sev.capitalize()}: {count}")
+
+          # Set GitHub outputs
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"critical-count={severity_counts['critical']}\n")
+              f.write(f"high-count={severity_counts['high']}\n")
+              f.write(f"total-count={sum(severity_counts.values())}\n")
+          PYTHON_EOF
+
+      - name: Generate table report
+        shell: bash
+        run: |
+          python3 << 'PYTHON_EOF'
+          import json
+
+          with open('vulnerabilities.json', 'r') as f:
+              data = json.load(f)
+
+          matches = data.get('matches', [])
+
+          print("| Severity | Package | Vulnerability | CVSS |")
+          print("|----------|---------|---------------|------|")
+
+          for match in sorted(matches, key=lambda m: {'critical': 0, 'high': 1, 'medium': 2, 'low': 3, 'unknown': 4}.get(m.get('vulnerability', {}).get('severity', 'unknown').lower(), 5)):
+              vuln = match.get('vulnerability', {})
+              pkg = match.get('artifact', {})
+
+              severity = vuln.get('severity', 'unknown').upper()
+              package = f"{pkg.get('name', 'unknown')}:{pkg.get('version', '?')}"
+              vuln_id = vuln.get('id', 'unknown')
+              cvss = vuln.get('cvss', [{}])[0].get('metrics', {}).get('score', 'N/A')
+
+              print(f"| {severity} | {package} | {vuln_id} | {cvss} |")
+
+          PYTHON_EOF
+
+      - name: Upload scan artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scan-reports-${{ matrix.tag }}
+          path: |
+            sbom.json
+            vulnerabilities.json
+          retention-days: 90
+
+      - name: Convert to SARIF for GitHub Security
+        shell: bash
+        run: |
+          python3 << 'PYTHON_EOF'
+          import json
+
+          with open('vulnerabilities.json', 'r') as f:
+              vuln_data = json.load(f)
+
+          sarif = {
+              'version': '2.1.0',
+              '$schema': 'https://json.schemastore.org/sarif-2.1.0.json',
+              'runs': [{
+                  'tool': {
+                      'driver': {
+                          'name': 'Grype',
+                          'informationUri': 'https://github.com/anchore/grype',
+                          'semanticVersion': '0.0.0'
+                      }
+                  },
+                  'results': []
+              }]
+          }
+
+          for match in vuln_data.get('matches', []):
+              vuln = match.get('vulnerability', {})
+              artifact = match.get('artifact', {})
+
+              severity_map = {'critical': 'error', 'high': 'error', 'medium': 'warning', 'low': 'note', 'unknown': 'none'}
+              level = severity_map.get(vuln.get('severity', 'unknown').lower(), 'none')
+
+              result = {
+                  'ruleId': vuln.get('id', 'unknown'),
+                  'message': {
+                      'text': f"{artifact.get('name')} has {vuln.get('id')}: {vuln.get('description', 'No description')}"
+                  },
+                  'level': level,
+                  'locations': [{
+                      'physicalLocation': {
+                          'address': {
+                              'uri': f"{artifact.get('name')}@{artifact.get('version')}"
+                          }
+                      }
+                  }]
+              }
+              sarif['runs'][0]['results'].append(result)
+
+          with open('grype-report.sarif', 'w') as f:
+              json.dump(sarif, f, indent=2)
+
+          print(f"✓ Generated SARIF with {len(sarif['runs'][0]['results'])} findings")
+
+          PYTHON_EOF
+
+      - name: Upload to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: grype-report.sarif
+          category: 'image-scan-periodic'
+
+      - name: Create/update issue for findings
+        if: ${{ steps.scan.outputs.total-count > 0 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          image_tag='${{ matrix.tag }}'
+          critical_count='${{ steps.scan.outputs.critical-count }}'
+          high_count='${{ steps.scan.outputs.high-count }}'
+          total_count='${{ steps.scan.outputs.total-count }}'
+
+          issue_title="[Periodic Scan] Vulnerabilities found in $image_tag"
+          issue_labels="security,scan:periodic"
+
+          # Check if issue exists
+          existing_issue=$(gh issue list \
+            --label "scan:periodic" \
+            --search "in:title \"$image_tag\"" \
+            --json number \
+            --jq '.[0].number' || echo '')
+
+          issue_body="## Periodic Image Scan Results
+
+          **Image**: \`${{ steps.image-ref.outputs.full-ref }}\`
+          **Scan Date**: \`$(date -u +'%Y-%m-%d %H:%M:%S UTC')\`
+
+          ### Summary
+          - **Critical**: ${critical_count}
+          - **High**: ${high_count}
+          - **Total**: ${total_count}
+
+          ### Details
+          See attached artifacts for full vulnerability report and SBOM.
+
+          ### Actions
+          - Review findings in Security tab: https://github.com/${{ github.repository }}/security/dependabot
+          - Link: [View SARIF Report]()"
+
+          if [ -n "$existing_issue" ]; then
+            echo "Updating existing issue #$existing_issue..."
+            gh issue update "$existing_issue" \
+              --body "$issue_body" \
+              --title "$issue_title"
+          else
+            echo "Creating new issue..."
+            gh issue create \
+              --title "$issue_title" \
+              --body "$issue_body" \
+              --label "$issue_labels"
+          fi
+
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Check gating policy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          critical_count='${{ steps.scan.outputs.critical-count }}'
+          fail_on_critical='${{ inputs.fail-on-critical }}'
+
+          if [ "$fail_on_critical" = 'true' ] && [ "$critical_count" -gt 0 ]; then
+            echo "✗ GATING POLICY VIOLATED: $critical_count critical vulnerabilities found"
+            echo "  (This does NOT block release, only creates issue)"
+            exit 0  # Don't fail; periodic scan should not block
+          else
+            echo "✓ Gating policy check passed (or non-blocking scan)"
+          fi

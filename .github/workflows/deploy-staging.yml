@@ -1,0 +1,94 @@
+﻿name: Reusable Deploy Staging
+
+on:
+  workflow_call:
+    inputs:
+      image-ref:
+        type: string
+        required: true
+      environment-name:
+        type: string
+        default: staging
+      compose-file:
+        type: string
+        default: docker-compose.yml
+      compose-service:
+        type: string
+        default: app
+      health-check-url:
+        type: string
+        default: http://localhost/health
+      health-check-max-retries:
+        type: string
+        default: '30'
+      health-check-delay:
+        type: string
+        default: '10'
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment-name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pull latest image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull '${{ inputs.image-ref }}' || exit 1
+
+      - name: Deploy via Docker Compose
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f '${{ inputs.compose-file }}' ]; then
+            echo "ERROR: docker-compose file not found: ${{ inputs.compose-file }}" >&2
+            exit 1
+          fi
+
+          # Set image in environment variable for docker-compose substitution
+          export IMAGE_REF='${{ inputs.image-ref }}'
+
+          # Stop and remove old containers
+          docker-compose -f '${{ inputs.compose-file }}' down || true
+
+          # Start new deployment
+          docker-compose -f '${{ inputs.compose-file }}' up -d '${{ inputs.compose-service }}'
+
+      - name: Wait for health check
+        shell: bash
+        run: |
+          set -euo pipefail
+          max_retries=${{ inputs.health-check-max-retries }}
+          delay=${{ inputs.health-check-delay }}
+          url='${{ inputs.health-check-url }}'
+
+          for i in $(seq 1 "$max_retries"); do
+            echo "[${i}/${max_retries}] Checking health: ${url}"
+            if curl -sf "$url" >/dev/null 2>&1; then
+              echo "✓ Health check passed"
+              exit 0
+            fi
+            if [ "$i" -lt "$max_retries" ]; then
+              echo "  Waiting ${delay}s before retry..."
+              sleep "$delay"
+            fi
+          done
+
+          echo "✗ Health check failed after $max_retries attempts" >&2
+          docker-compose -f '${{ inputs.compose-file }}' logs
+          exit 1
+
+      - name: Log deployment status
+        if: success()
+        shell: bash
+        run: |
+          echo "✓ Staging deployment successful"
+          echo "  Image: ${{ inputs.image-ref }}"
+          echo "  Environment: ${{ inputs.environment-name }}"
+          echo "  Health check: ${{ inputs.health-check-url }}"

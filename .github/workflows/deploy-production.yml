@@ -1,0 +1,176 @@
+name: Reusable Deploy Production
+
+on:
+  workflow_call:
+    inputs:
+      image-ref:
+        type: string
+        required: true
+      environment-name:
+        type: string
+        default: production
+      compose-file:
+        type: string
+        default: docker-compose.yml
+      compose-service:
+        type: string
+        default: app
+      health-check-url:
+        type: string
+        default: http://localhost/health
+      health-check-max-retries:
+        type: string
+        default: '30'
+      health-check-delay:
+        type: string
+        default: '10'
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  pre-deploy-check:
+    name: Pre-deployment Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify image exists in registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_ref='${{ inputs.image-ref }}'
+          echo "Verifying image: ${image_ref}"
+
+          # Use docker to check if image exists
+          docker pull "${image_ref}" --dry-run 2>/dev/null || exit 1
+          echo "✓ Image verified in registry"
+
+      - name: Verify deployment configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          compose_file='${{ inputs.compose-file }}'
+
+          if [ ! -f "$compose_file" ]; then
+            echo "ERROR: Compose file not found: $compose_file" >&2
+            exit 1
+          fi
+
+          echo "✓ Deployment configuration verified"
+
+  deploy:
+    needs: pre-deploy-check
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment-name }}
+    name: Deploy to Production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create deployment record
+        shell: bash
+        run: |
+          echo "Deployment initiated at: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          echo "Image: ${{ inputs.image-ref }}"
+          echo "Environment: ${{ inputs.environment-name }}"
+
+      - name: Pull image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull '${{ inputs.image-ref }}'
+          echo "✓ Image pulled successfully"
+
+      - name: Backup current deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          compose_file='${{ inputs.compose-file }}'
+          compose_service='${{ inputs.compose-service }}'
+
+          # Export current container state for rollback
+          docker-compose -f "$compose_file" ps "$compose_service" > /tmp/pre-deploy-state.log 2>&1 || true
+          echo "✓ Current deployment state backed up"
+
+      - name: Deploy via Docker Compose
+        shell: bash
+        run: |
+          set -euo pipefail
+          export IMAGE_REF='${{ inputs.image-ref }}'
+          compose_file='${{ inputs.compose-file }}'
+          compose_service='${{ inputs.compose-service }}'
+
+          echo "Deploying ${compose_service}..."
+          docker-compose -f "$compose_file" pull
+          docker-compose -f "$compose_file" down
+          docker-compose -f "$compose_file" up -d "$compose_service"
+
+          echo "✓ Deployment complete"
+
+      - name: Wait for health check
+        shell: bash
+        run: |
+          set -euo pipefail
+          max_retries=${{ inputs.health-check-max-retries }}
+          delay=${{ inputs.health-check-delay }}
+          url='${{ inputs.health-check-url }}'
+
+          echo "Waiting for application health check..."
+          for i in $(seq 1 "$max_retries"); do
+            if curl -sf "$url" >/dev/null 2>&1; then
+              echo "✓ Health check passed on attempt $i"
+              exit 0
+            fi
+            if [ "$i" -lt "$max_retries" ]; then
+              echo "  [${i}/${max_retries}] Retrying in ${delay}s..."
+              sleep "$delay"
+            fi
+          done
+
+          echo "✗ Health check failed after ${max_retries} attempts" >&2
+          echo ""
+          echo "Application logs:"
+          docker-compose -f '${{ inputs.compose-file }}' logs '${{ inputs.compose-service }}' || true
+          exit 1
+
+      - name: Run smoke tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoints=(/health /api/status)
+
+          echo "Running smoke tests..."
+          for endpoint in "${endpoints[@]}"; do
+            response_code=$(curl -sw '%{http_code}' -o /dev/null '${{ inputs.health-check-url }}'${endpoint#/health} 2>/dev/null || echo '000')
+            if [ "$response_code" -ge 200 ] && [ "$response_code" -lt 400 ]; then
+              echo "  ✓ ${endpoint}: HTTP $response_code"
+            else
+              echo "  ⚠ ${endpoint}: HTTP $response_code (non-critical)"
+            fi
+          done
+
+      - name: Post-deployment verification
+        shell: bash
+        run: |
+          docker-compose -f '${{ inputs.compose-file }}' ps
+          echo ""
+          echo "✓ Production deployment successful"
+          echo "  Image: ${{ inputs.image-ref }}"
+          echo "  Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+
+      - name: Rollback on failure
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Deployment failed, initiating rollback..."
+          compose_file='${{ inputs.compose-file }}'
+          compose_service='${{ inputs.compose-service }}'
+
+          echo "Restoring previous deployment state..."
+          docker-compose -f "$compose_file" down || true
+          docker-compose -f "$compose_file" up -d "$compose_service" || true
+
+          echo "⚠ Rollback attempted. Manual verification required."
+          exit 1

@@ -1,0 +1,209 @@
+name: Reusable DAST and Smoke Checks
+
+on:
+  workflow_call:
+    inputs:
+      target-url:
+        type: string
+        required: true
+      dast-threshold:
+        type: string
+        default: medium
+       description: 'Minimum severity to block: low, medium, high, critical'
+      smoke-endpoints:
+       type: string
+       default: /health
+       description: 'Comma-separated list of endpoints to smoke-test'
+    secrets:
+      DAST_USERNAME:
+        required: false
+      DAST_PASSWORD:
+       required: false
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    name: Smoke Tests
+    steps:
+      - name: Test health endpoints
+       shell: bash
+       run: |
+         set -euo pipefail
+         target_url='${{ inputs.target-url }}'
+         endpoints='${{ inputs.smoke-endpoints }}'
+
+         # Wait for target to be responsive (max 60 sec)
+         echo "Waiting for $target_url to be responsive..."
+         for i in $(seq 1 12); do
+           if curl -sf "${target_url}/health" >/dev/null 2>&1; then
+             echo "✓ Target is responsive"
+             break
+           fi
+           if [ "$i" -lt 12 ]; then
+             echo "  Attempt $i/12, retrying in 5s..."
+             sleep 5
+           else
+             echo "✗ Target failed to respond after 60s" >&2
+             exit 1
+           fi
+         done
+
+         # Test each endpoint
+         IFS=',' read -ra ENDPOINT_ARRAY <<< "$endpoints"
+         for endpoint in "${ENDPOINT_ARRAY[@]}"; do
+           endpoint=$(echo "$endpoint" | xargs) # trim whitespace
+           echo "Testing $endpoint..."
+           response_code=$(curl -sw '%{http_code}' -o /dev/null "${target_url}${endpoint}")
+           if [ "$response_code" -ge 200 ] && [ "$response_code" -lt 400 ]; then
+             echo "  ✓ $endpoint: HTTP $response_code"
+           else
+             echo "  ✗ $endpoint: HTTP $response_code" >&2
+             exit 1
+           fi
+         done
+
+  dast-scan:
+    runs-on: ubuntu-latest
+    name: DAST (OWASP ZAP)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run OWASP ZAP scan
+       shell: bash
+       run: |
+         set -euo pipefail
+         target_url='${{ inputs.target-url }}'
+
+         echo "Starting OWASP ZAP scan of ${target_url}..."
+
+         # Run ZAP in Docker (baseline + full scan)
+         docker run --rm \
+           -v "$PWD:/zap/wrk" \
+           -e ZAP_OPTS="-config api.disablekey=true" \
+           ghcr.io/zaproxy/zaproxy:stable \
+           bash -c "
+             set -euo pipefail
+
+             # Baseline scan (passive checks)
+             echo 'Running baseline scan...'
+             zap-baseline.py -t '${target_url}' \
+               -J /zap/wrk/baseline-report.json || true
+
+             # Full scan (passive + active checks)
+             echo 'Running full scan...'
+             zap-full-scan.py -t '${target_url}' \
+               -J /zap/wrk/zap-report.json \
+               -r /zap/wrk/zap-report.html || true
+
+             # Export as SARIF for GitHub
+             echo 'Converting to SARIF...'
+             python3 << 'PYTHON_EOF'
+         import json
+         import sys
+
+         with open('/zap/wrk/zap-report.json', 'r') as f:
+             zap_data = json.load(f)
+
+         sarif_output = {
+             'version': '2.1.0',
+             'runs': [{
+                 'tool': {
+                     'driver': {
+                         'name': 'OWASP ZAP',
+                         'informationUri': 'https://www.zaproxy.org'
+                     }
+                 },
+                 'results': []
+             }]
+         }
+
+         # Map ZAP alerts to SARIF
+         for alert in zap_data.get('site', [{}])[0].get('alerts', []):
+             result = {
+                 'ruleId': alert.get('pluginid', 'unknown'),
+                 'message': {'text': alert.get('name', 'Unknown Alert')},
+                 'level': _zap_severity_to_level(alert.get('riskcode', 0)),
+                 'locations': [{
+                     'physicalLocation': {
+                         'address': {'uri': '${target_url}'}
+                     }
+                 }]
+             }
+             sarif_output['runs'][0]['results'].append(result)
+
+         with open('/zap/wrk/zap-report.sarif', 'w') as f:
+             json.dump(sarif_output, f, indent=2)
+
+         def _zap_severity_to_level(risk_code):
+             # ZAP risk codes: 0=info, 1=low, 2=medium, 3=high
+             return ['note', 'warning', 'error', 'error'][min(risk_code, 3)]
+         PYTHON_EOF
+           "
+
+      - name: Upload OWASP ZAP reports
+       if: always()
+       uses: actions/upload-artifact@v4
+       with:
+         name: zap-scan-reports
+         path: |
+           zap-report.json
+           zap-report.html
+           zap-report.sarif
+         retention-days: 30
+
+      - name: Parse and gate on findings
+       shell: bash
+       run: |
+         set -euo pipefail
+         threshold='${{ inputs.dast-threshold }}'
+
+         # Map threshold to numeric severity (lower = more permissive)
+         declare -A severity_map=([low]=0 [medium]=1 [high]=2 [critical]=3)
+         threshold_level=${severity_map[$threshold]:-1}
+
+         echo "DAST Threshold: $threshold (level: $threshold_level)"
+         echo ""
+
+         # Parse JSON report and count findings by severity
+         python3 << PYTHON_EOF
+         import json
+         import sys
+
+         with open('zap-report.json', 'r') as f:
+             data = json.load(f)
+
+         severity_counts = {'info': 0, 'low': 0, 'medium': 0, 'high': 0, 'critical': 0}
+
+         for alert in data.get('site', [{}])[0].get('alerts', []):
+             risk_code = alert.get('riskcode', 0)
+             severity_map = {0: 'info', 1: 'low', 2: 'medium', 3: 'high'}
+             severity = severity_map.get(risk_code, 'info')
+             severity_counts[severity] += 1
+             print(f"  [{severity.upper()}] {alert.get('name')}")
+
+         print("\nFindings Summary:")
+         for sev, count in severity_counts.items():
+             print(f"  {sev.capitalize()}: {count}")
+
+         # Gate on threshold
+         threshold_level = {'low': 0, 'medium': 1, 'high': 2, 'critical': 3}.get('$threshold', 1)
+         blocking_severities = ['low', 'medium', 'high', 'critical'][threshold_level:]
+         blocking_count = sum(severity_counts[s] for s in blocking_severities)
+
+         if blocking_count > 0:
+             print(f"\n✗ DAST scan FAILED: {blocking_count} finding(s) at or above threshold")
+             sys.exit(1)
+         else:
+             print("\n✓ DAST scan PASSED")
+         PYTHON_EOF
+
+      - name: Upload to GitHub Security
+       if: always()
+       uses: github/codeql-action/upload-sarif@v3
+       with:
+         sarif_file: zap-report.sarif
+         category: 'DAST-OWASP-ZAP'

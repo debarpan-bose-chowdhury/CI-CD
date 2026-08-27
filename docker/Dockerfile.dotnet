@@ -1,0 +1,25 @@
+# syntax=docker/dockerfile:1
+
+ARG DOTNET_VERSION=8.0
+FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS build
+ARG APP_PROJECT=.
+ARG CONFIGURATION=Release
+WORKDIR /src
+COPY . .
+RUN dotnet restore "${APP_PROJECT}"
+RUN dotnet publish "${APP_PROJECT}" -c "${CONFIGURATION}" -o /app/publish --no-restore /p:UseAppHost=false
+
+FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime
+ARG APP_PORT=8080
+WORKDIR /app
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup --no-create-home appuser && chown -R appuser:appgroup /app
+COPY --from=build /app/publish/ ./
+RUN set -eu; dll="$(find /app -maxdepth 1 -name '*.dll' ! -name '*Test*.dll' ! -name '*Tests*.dll' | head -n 1 | xargs -r basename)"; \
+    if [ -z "$dll" ]; then echo 'Unable to find published .NET assembly.' >&2; exit 1; fi; \
+    printf '#!/bin/sh\nexec dotnet /app/%s "$@"\n' "$dll" > /app/start.sh; chmod +x /app/start.sh
+ENV ASPNETCORE_URLS=http://+:${APP_PORT}
+ENV ASPNETCORE_ENVIRONMENT=Production
+ENV DOTNET_RUNNING_IN_CONTAINER=true
+EXPOSE ${APP_PORT}
+USER appuser
+ENTRYPOINT ["/app/start.sh"]
