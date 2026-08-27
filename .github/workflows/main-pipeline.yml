@@ -1,0 +1,122 @@
+name: Main CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: read
+  deployments: write
+  security-events: write
+  packages: write
+
+jobs:
+  ci:
+    name: Continuous Integration
+    uses: ./.github/workflows/ci.yml
+    with:
+      language: auto
+      dotnet-version: '8.0.x'
+      python-version: '3.12'
+      run-sonarqube: false
+    secrets:
+      sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
+      sonar-token: ${{ secrets.SONAR_TOKEN }}
+
+  docker-build:
+    name: Build & Push Docker Image
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/docker-build-push.yml
+    with:
+      language: auto
+      registry: ghcr.io
+      image-tag: ${{ github.sha }}
+    secrets:
+      REGISTRY_USERNAME: ${{ github.actor }}
+      REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: docker-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/deploy-staging.yml
+    with:
+      image-ref: ${{ needs.docker-build.outputs.image-ref }}
+      environment-name: staging
+      compose-file: docker-compose.staging.yml
+      compose-service: app
+      health-check-url: http://staging-app/health
+
+  dast-scan:
+    name: DAST Security Scan
+    needs: deploy-staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/dast-smoke.yml
+    with:
+      target-url: http://staging-app:8080
+      dast-threshold: medium
+      smoke-endpoints: /health,/api/status
+
+  approval-gate:
+    name: Production Approval Gate
+    needs: dast-scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: production-approval
+    steps:
+      - name: Approval gate
+        shell: bash
+        run: |
+          echo "✓ Production deployment approved"
+          echo "Proceeding to production..."
+
+  deploy-production:
+    name: Deploy to Production
+    needs: [docker-build, approval-gate]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/deploy-production.yml
+    with:
+      image-ref: ${{ needs.docker-build.outputs.image-ref }}
+      environment-name: production
+      compose-file: docker-compose.yml
+      compose-service: app
+      health-check-url: http://app/health
+
+  continuous-monitoring:
+    name: Continuous Monitoring
+    needs: deploy-production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/continuous-monitoring.yml
+    with:
+      image-ref: ${{ needs.docker-build.outputs.image-ref }}
+      monitoring-url: http://app/health
+      check-interval: '60'
+      max-checks: '3'
+
+  version-bump:
+    name: Version Bump
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/version-bump.yml
+    with:
+      language: auto
+      base-branch: main
+    secrets:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release-tag:
+    name: Create Release Tag
+    needs: version-bump
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/release-tag.yml
+    with:
+      language: auto
+      release-notes-file: CHANGELOG.md
+    secrets:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
