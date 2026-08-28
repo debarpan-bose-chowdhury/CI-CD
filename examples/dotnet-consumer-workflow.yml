@@ -1,0 +1,101 @@
+name: Example .NET Consumer Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: read
+  deployments: write
+  security-events: write
+  packages: write
+
+jobs:
+  ci:
+    name: CI (.NET)
+    uses: DEBARPAN2000/CI-CD/.github/workflows/ci.yml@main
+    with:
+      language: dotnet
+      dotnet-version: '8.0.x'
+      dotnet-project: ./src
+      run-sonarqube: true
+      sonar-project-key: my-org/my-dotnet-app
+    secrets:
+      sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
+      sonar-token: ${{ secrets.SONAR_TOKEN }}
+
+  build-docker:
+    name: Build Docker Image
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: DEBARPAN2000/CI-CD/.github/workflows/docker-build-push.yml@main
+    with:
+      language: dotnet
+      registry: ghcr.io
+      image-name: my-dotnet-app
+      image-tag: ${{ github.sha }}
+      build-context: .
+      dockerfile-path: ./Dockerfile
+      dotnet-version: '8.0'
+    secrets:
+      REGISTRY_USERNAME: ${{ github.actor }}
+      REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: build-docker
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: DEBARPAN2000/CI-CD/.github/workflows/deploy-staging.yml@main
+    with:
+      image-ref: ${{ needs.build-docker.outputs.image-ref }}
+      environment-name: staging
+      compose-file: docker-compose.staging.yml
+      compose-service: dotnet-app
+      health-check-url: http://staging-app:8080/health
+      health-check-max-retries: '30'
+      health-check-delay: '10'
+
+  dast-scan:
+    name: DAST Security Scan
+    needs: deploy-staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: DEBARPAN2000/CI-CD/.github/workflows/dast-smoke.yml@main
+    with:
+      target-url: http://staging-app:8080
+      dast-threshold: medium
+      smoke-endpoints: /health,/api/status
+
+  approval:
+    name: Manual Approval for Production
+    needs: dast-scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: production-approval
+    steps:
+      - run: echo "✓ Approved for production"
+
+  deploy-prod:
+    name: Deploy to Production
+    needs: [build-docker, approval]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: DEBARPAN2000/CI-CD/.github/workflows/deploy-production.yml@main
+    with:
+      image-ref: ${{ needs.build-docker.outputs.image-ref }}
+      environment-name: production
+      compose-file: docker-compose.yml
+      compose-service: dotnet-app
+      health-check-url: http://app:8080/health
+
+  monitor:
+    name: Continuous Monitoring
+    needs: deploy-prod
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: DEBARPAN2000/CI-CD/.github/workflows/continuous-monitoring.yml@main
+    with:
+      image-ref: ${{ needs.build-docker.outputs.image-ref }}
+      monitoring-url: http://app:8080/health

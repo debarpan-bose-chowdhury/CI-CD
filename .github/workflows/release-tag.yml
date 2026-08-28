@@ -1,0 +1,203 @@
+name: Reusable Release Tag
+
+on:
+  workflow_call:
+    inputs:
+      language:
+        type: string
+        default: auto
+      version-file-dotnet:
+        type: string
+        default: Directory.Build.props
+      version-file-python:
+        type: string
+        default: pyproject.toml
+      release-notes-file:
+        type: string
+        default: CHANGELOG.md
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup git
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+      - name: Detect language and extract version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          language='${{ inputs.language }}'
+          version_file_dotnet='${{ inputs.version-file-dotnet }}'
+          version_file_python='${{ inputs.version-file-python }}'
+
+          detected_language=''
+          version_file=''
+          current_version=''
+
+          # Auto-detect if not specified
+          if [ "$language" = 'auto' ] || [ -z "$language" ]; then
+            if [ -f "$version_file_dotnet" ]; then
+              detected_language='dotnet'
+              version_file="$version_file_dotnet"
+            elif [ -f "$version_file_python" ]; then
+              detected_language='python'
+              version_file="$version_file_python"
+            fi
+          elif [ "$language" = 'dotnet' ]; then
+            detected_language='dotnet'
+            version_file="$version_file_dotnet"
+          elif [ "$language" = 'python' ]; then
+            detected_language='python'
+            version_file="$version_file_python"
+          fi
+
+          if [ -z "$detected_language" ] || [ -z "$version_file" ]; then
+            echo "ERROR: Unable to detect language or version file" >&2
+            exit 1
+          fi
+
+          # Extract version from file
+          if [ "$detected_language" = 'dotnet' ]; then
+            current_version=$(grep -oP '<Version>\K[^<]+' "$version_file" || echo '')
+          elif [ "$detected_language" = 'python' ]; then
+            current_version=$(grep -oP 'version\s*=\s*["\047]\K[^"\047]+' "$version_file" | head -1 || echo '')
+          fi
+
+          if [ -z "$current_version" ]; then
+            echo "ERROR: Unable to extract version from $version_file" >&2
+            exit 1
+          fi
+
+          echo "Detected language: $detected_language"
+          echo "Version file: $version_file"
+          echo "Current version: $current_version"
+
+          echo "language=$detected_language" >> "$GITHUB_OUTPUT"
+          echo "version=$current_version" >> "$GITHUB_OUTPUT"
+
+      - name: Find previous release tag
+        id: prev-tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Get the most recent tag
+          prev_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo '')
+
+          if [ -z "$prev_tag" ]; then
+            echo "No previous tags found"
+            echo "prev-tag=HEAD~999" >> "$GITHUB_OUTPUT"  # Use root
+          else
+            echo "Previous tag: $prev_tag"
+            echo "prev-tag=$prev_tag" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate release notes from commits
+        id: release-notes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version='${{ steps.version.outputs.version }}'
+          prev_tag='${{ steps.prev-tag.outputs.prev-tag }}'
+
+          echo "Generating release notes from $prev_tag to HEAD..."
+
+          # Get commits since previous tag
+          if [ "$prev_tag" = "HEAD~999" ]; then
+            commits=$(git log --pretty=format:'%h - %s (%an)' --reverse)
+          else
+            commits=$(git log "$prev_tag..HEAD" --pretty=format:'%h - %s (%an)' --reverse)
+          fi
+
+          # Generate markdown release notes
+          release_notes="# Release $version
+
+          $(date -u +'%Y-%m-%d')
+
+          ## Changes
+
+          $(echo "$commits" | grep -E '^[0-9a-f]{7} - (feat|fix|docs|style|refactor|perf|test|chore):' | sed 's/^/- /' || echo '- No categorized changes found')
+
+          ### Commits
+
+          $(echo "$commits" | sed 's/^/- /' || echo '- No commits found')
+
+          **Full Changelog**: [$prev_tag...v${version}](https://github.com/${{ github.repository }}/compare/${prev_tag}...v${version})
+          "
+
+          # Save to file
+          echo "$release_notes" > /tmp/release-notes.md
+          cat /tmp/release-notes.md
+
+          # URL encode for GitHub API
+          echo "notes=$(cat /tmp/release-notes.md | jq -Rs .)" >> "$GITHUB_OUTPUT"
+
+      - name: Check if tag already exists
+        id: tag-check
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='${{ steps.version.outputs.version }}'
+          tag_name="v${version}"
+
+          if git rev-parse "$tag_name" >/dev/null 2>&1; then
+            echo "Tag already exists: $tag_name"
+            echo "tag-exists=true" >> "$GITHUB_OUTPUT"
+            exit 1
+          else
+            echo "Tag does not exist: $tag_name (safe to create)"
+            echo "tag-exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create git tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='${{ steps.version.outputs.version }}'
+          tag_name="v${version}"
+
+          echo "Creating tag: $tag_name"
+
+          git tag "$tag_name" -m "Release $version"
+          git push origin "$tag_name"
+
+          echo "✓ Tag created and pushed: $tag_name"
+
+      - name: Create GitHub Release
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='${{ steps.version.outputs.version }}'
+          tag_name="v${version}"
+
+          echo "Creating GitHub Release for $tag_name..."
+
+          gh release create "$tag_name" \
+            --title "Release $version" \
+            --notes-file /tmp/release-notes.md || echo "Release creation failed or already exists"
+
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Output release information
+        shell: bash
+        run: |
+          version='${{ steps.version.outputs.version }}'
+          echo "✓ Release workflow completed"
+          echo "  Version: $version"
+          echo "  Tag: v${version}"
+          echo "  URL: https://github.com/${{ github.repository }}/releases/tag/v${version}"

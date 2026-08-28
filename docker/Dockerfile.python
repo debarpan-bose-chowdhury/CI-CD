@@ -1,0 +1,37 @@
+# syntax=docker/dockerfile:1
+
+ARG PYTHON_VERSION=3.12
+FROM python:${PYTHON_VERSION}-slim AS build
+WORKDIR /src
+COPY . .
+# hadolint ignore=DL3013
+RUN python -m pip install --no-cache-dir --upgrade pip wheel setuptools
+RUN set -eu; \
+    if [ -f requirements-dev.txt ]; then pip install --no-cache-dir --prefix=/install -r requirements-dev.txt; \
+    elif [ -f requirements.txt ]; then pip install --no-cache-dir --prefix=/install -r requirements.txt; \
+    else pip install --no-cache-dir --prefix=/install .; fi
+
+FROM python:${PYTHON_VERSION}-slim AS runtime
+ARG APP_PORT=8080
+ARG APP_MODULE=
+WORKDIR /app
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup --no-create-home appuser && chown -R appuser:appgroup /app
+COPY --from=build /install /usr/local
+COPY --from=build /src /app
+RUN printf '%s\n' \
+    '#!/bin/sh' \
+    'set -eu' \
+    "if [ -n \"\${APP_MODULE:-}\" ]; then" \
+    "  exec python -m \"\${APP_MODULE}\" \"\$@\"" \
+    'fi' \
+    'if [ -f main.py ]; then' \
+    "  exec python main.py \"\$@\"" \
+    'fi' \
+    "exec python -m app \"\$@\"" \
+    > /app/start.sh && chmod +x /app/start.sh
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PORT=${APP_PORT}
+EXPOSE ${APP_PORT}
+USER appuser
+ENTRYPOINT ["/app/start.sh"]

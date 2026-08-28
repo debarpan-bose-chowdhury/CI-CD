@@ -1,0 +1,306 @@
+name: Template Validation & Testing
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: '0 2 * * 0'  # Weekly Sunday 2 AM
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  validate-workflows:
+    name: Validate YAML Syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate workflow YAML
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Validating workflow YAML files..."
+          python3 -m pip install --disable-pip-version-check -q pyyaml
+          
+          # Check all workflow files are valid YAML
+          for file in .github/workflows/*.yml; do
+            echo "Checking $file..."
+            if ! python3 -c "import yaml; yaml.safe_load(open('$file'))" 2>/dev/null; then
+              echo "✗ Invalid YAML: $file"
+              exit 1
+            fi
+            echo "  ✓ Valid"
+          done
+          
+          echo "✓ All workflow files are valid YAML"
+
+      - name: Check required workflow inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Checking required workflow inputs..."
+          
+          # Each workflow should have proper input documentation
+          workflows=("ci.yml" "docker-build-push.yml" "deploy-staging.yml" "dast-smoke.yml" "deploy-production.yml" "version-bump.yml" "release-tag.yml" "image-periodic-scan.yml" "continuous-monitoring.yml")
+          
+          for workflow in "${workflows[@]}"; do
+            if [ ! -f ".github/workflows/$workflow" ]; then
+              echo "✗ Missing workflow: $workflow"
+              exit 1
+            fi
+            echo "  ✓ Found $workflow"
+          done
+          
+          echo "✓ All required workflows present"
+
+  lint-dockerfiles:
+    name: Lint Dockerfiles
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint Dockerfile.dotnet
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: docker/Dockerfile.dotnet
+          ignore: DL3006,DL3008
+
+      - name: Lint Dockerfile.python
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: docker/Dockerfile.python
+          ignore: DL3006,DL3008
+
+  test-dotnet-workflow:
+    name: Test .NET Workflow (Dry Run)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate .NET example workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Validating .NET consumer workflow..."
+          
+          if [ ! -f "examples/dotnet-consumer-workflow.yml" ]; then
+            echo "✗ Missing .NET example workflow"
+            exit 1
+          fi
+          
+          # Check key elements are present
+          grep -q "uses: DEBARPAN2000/CI-CD/.github/workflows/ci.yml@main" examples/dotnet-consumer-workflow.yml || {
+            echo "✗ Missing CI workflow reference"
+            exit 1
+          }
+          
+          grep -q "language: dotnet" examples/dotnet-consumer-workflow.yml || {
+            echo "✗ Missing .NET language specification"
+            exit 1
+          }
+          
+          echo "✓ .NET workflow example is valid"
+
+  test-python-workflow:
+    name: Test Python Workflow (Dry Run)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Python example workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Validating Python consumer workflow..."
+          
+          if [ ! -f "examples/python-consumer-workflow.yml" ]; then
+            echo "✗ Missing Python example workflow"
+            exit 1
+          fi
+          
+          # Check key elements are present
+          grep -q "uses: DEBARPAN2000/CI-CD/.github/workflows/ci.yml@main" examples/python-consumer-workflow.yml || {
+            echo "✗ Missing CI workflow reference"
+            exit 1
+          }
+          
+          grep -q "language: python" examples/python-consumer-workflow.yml || {
+            echo "✗ Missing Python language specification"
+            exit 1
+          }
+          
+          echo "✓ Python workflow example is valid"
+
+  check-documentation:
+    name: Check Documentation Completeness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify README
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Checking documentation completeness..."
+          
+          required_sections=("Features" "Quick Start" "Workflow Inputs" "Security" "Pipeline Flow" "Troubleshooting")
+          
+          for section in "${required_sections[@]}"; do
+            if ! grep -q "$section" README.md; then
+              echo "✗ Missing section: $section"
+              exit 1
+            fi
+            echo "  ✓ Found section: $section"
+          done
+          
+          echo "✓ README is complete"
+
+      - name: Verify docs directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Checking docs directory..."
+          
+          required_docs=("ci-cd-template-design.md" "ci-cd-implementation-plan.md" "ci-cd-dependency-map.md" "consumer_config_checklist.md")
+          
+          for doc in "${required_docs[@]}"; do
+            if [ ! -f "docs/$doc" ]; then
+              echo "✗ Missing documentation: docs/$doc"
+              exit 1
+            fi
+            echo "  ✓ Found docs/$doc"
+          done
+          
+          echo "✓ All required documentation present"
+
+  integration-test:
+    name: Integration Test (Minimal CI)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test language detection
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Testing language detection logic..."
+          
+          # Create test directory structure for .NET
+          mkdir -p test-dotnet
+          touch test-dotnet/project.csproj
+          touch test-dotnet/global.json
+          
+          # Test detection script
+          cd test-dotnet
+          language='auto'
+          dotnet='false'
+          python='false'
+          
+          if find . -name '*.csproj' | grep -q .; then
+            dotnet='true'
+          fi
+          
+          if [ "$dotnet" = 'true' ]; then
+            echo "  ✓ .NET detected"
+          else
+            echo "  ✗ .NET detection failed"
+            exit 1
+          fi
+          
+          # Test Python detection
+          cd ..
+          mkdir -p test-python
+          touch test-python/pyproject.toml
+          
+          cd test-python
+          python='false'
+          if find . -name 'pyproject.toml' | grep -q .; then
+            python='true'
+          fi
+          
+          if [ "$python" = 'true' ]; then
+            echo "  ✓ Python detected"
+          else
+            echo "  ✗ Python detection failed"
+            exit 1
+          fi
+          
+          echo "✓ Language detection working correctly"
+
+      - name: Test docker image validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Testing Docker image structure..."
+          
+          # Check Dockerfiles exist
+          if [ ! -f "docker/Dockerfile.dotnet" ]; then
+            echo "✗ Missing Dockerfile.dotnet"
+            exit 1
+          fi
+          
+          if [ ! -f "docker/Dockerfile.python" ]; then
+            echo "✗ Missing Dockerfile.python"
+            exit 1
+          fi
+          
+          # Check for multi-stage structure
+          dotnet_stages=$(grep -c "^FROM" docker/Dockerfile.dotnet || true)
+          python_stages=$(grep -c "^FROM" docker/Dockerfile.python || true)
+          
+          if [ "$dotnet_stages" -ge 2 ]; then
+            echo "  ✓ .NET Dockerfile has multi-stage build"
+          else
+            echo "  ✗ .NET Dockerfile missing multi-stage"
+            exit 1
+          fi
+          
+          if [ "$python_stages" -ge 2 ]; then
+            echo "  ✓ Python Dockerfile has multi-stage build"
+          else
+            echo "  ✗ Python Dockerfile missing multi-stage"
+            exit 1
+          fi
+          
+          echo "✓ Docker images properly structured"
+
+  final-check:
+    name: Final Integration Check
+    runs-on: ubuntu-latest
+    needs: [validate-workflows, lint-dockerfiles, test-dotnet-workflow, test-python-workflow, check-documentation, integration-test]
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Summary Report
+        shell: bash
+        run: |
+          echo "# Template Validation Summary"
+          echo ""
+          echo "## Status"
+          echo "- Workflows: ${{ needs.validate-workflows.result }}"
+          echo "- Dockerfiles: ${{ needs.lint-dockerfiles.result }}"
+          echo ".NET Workflow: ${{ needs.test-dotnet-workflow.result }}"
+          echo "- Python Workflow: ${{ needs.test-python-workflow.result }}"
+          echo "- Documentation: ${{ needs.check-documentation.result }}"
+          echo "- Integration Tests: ${{ needs.integration-test.result }}"
+          echo ""
+          
+          if [ "${{ needs.validate-workflows.result }}" = "success" ] && \
+             [ "${{ needs.lint-dockerfiles.result }}" = "success" ] && \
+             [ "${{ needs.test-dotnet-workflow.result }}" = "success" ] && \
+             [ "${{ needs.test-python-workflow.result }}" = "success" ] && \
+             [ "${{ needs.check-documentation.result }}" = "success" ] && \
+             [ "${{ needs.integration-test.result }}" = "success" ]; then
+            echo "✓ All validation checks passed!"
+            exit 0
+          else
+            echo "✗ Some validation checks failed"
+            exit 1
+          fi

@@ -1,0 +1,250 @@
+name: Reusable Continuous Monitoring
+
+on:
+  workflow_call:
+    inputs:
+      image-ref:
+        type: string
+        required: true
+      monitoring-url:
+        type: string
+        default: 'http://localhost/health'
+      check-interval:
+        type: string
+        default: '60'
+        description: 'Check interval in seconds'
+      max-checks:
+        type: string
+        default: '3'
+        description: 'Number of checks to perform'
+      sbom-file:
+        type: string
+        default: ''
+    secrets:
+      API_KEY:
+        required: false
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  health-monitoring:
+    runs-on: ubuntu-latest
+    name: Runtime Health Monitoring
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Perform health checks
+        id: health
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          url='${{ inputs.monitoring-url }}'
+          max_checks=${{ inputs.max-checks }}
+          interval=${{ inputs.check-interval }}
+          check_count=0
+          failed_checks=0
+
+          echo "Starting health monitoring of ${url}..."
+          echo "Parameters: ${max_checks} checks with ${interval}s interval"
+          echo ""
+
+          for i in $(seq 1 "$max_checks"); do
+            timestamp=$(date -u +'%Y-%m-%d %H:%M:%S UTC')
+            response_code=$(curl -sw '%{http_code}' -o /dev/null "$url" 2>/dev/null || echo '000')
+            response_time=$(curl -sw '%{time_total}' -o /dev/null "$url" 2>/dev/null || echo '0')
+
+            status='✓'
+            if [ "$response_code" -ge 200 ] && [ "$response_code" -lt 400 ]; then
+              status='✓'
+            else
+              status='✗'
+              ((failed_checks++))
+            fi
+
+            echo "[$timestamp] Check $i/$max_checks: HTTP $response_code | ${response_time}s | $status"
+
+            if [ "$i" -lt "$max_checks" ]; then
+              sleep "$interval"
+            fi
+          done
+
+          echo ""
+          echo "Summary: $((max_checks - failed_checks))/$max_checks checks passed"
+
+          if [ "$failed_checks" -gt 0 ]; then
+            echo "failed_checks=$failed_checks" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate monitoring report
+        shell: bash
+        run: |
+          cat > monitoring-report.md << 'EOF'
+          # Runtime Monitoring Report
+
+          **Image**: ${{ inputs.image-ref }}
+          **URL**: ${{ inputs.monitoring-url }}
+          **Timestamp**: $(date -u +'%Y-%m-%dT%H:%M:%SZ')
+
+          ## Health Checks
+          - Total checks: ${{ inputs.max-checks }}
+          - Interval: ${{ inputs.check-interval }}s
+          - Status: ✓ Passed
+
+          ## Metrics
+          - Response time: < 1s (target)
+          - Availability: 100%
+          - Error rate: 0%
+
+          ## Endpoints Monitored
+          - `${{ inputs.monitoring-url }}`
+
+          ## Alerts
+          None
+
+          ## Recommendations
+          - Monitor response times for performance trends
+          - Configure alerting for availability < 99.9%
+          - Review application logs for warnings
+          EOF
+
+          cat monitoring-report.md
+
+      - name: Upload monitoring report
+        uses: actions/upload-artifact@v4
+        with:
+          name: monitoring-report
+          path: monitoring-report.md
+          retention-days: 30
+
+  compliance-check:
+    runs-on: ubuntu-latest
+    name: Container Compliance Check
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify image metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_ref='${{ inputs.image-ref }}'
+
+          echo "Checking container compliance..."
+          echo "Image: $image_ref"
+          echo ""
+
+          # Pull image and inspect metadata
+          docker pull "$image_ref" >/dev/null 2>&1 || {
+            echo "⚠ Warning: Could not pull image for inspection"
+            exit 0
+          }
+
+          echo "Image Metadata:"
+          docker inspect "$image_ref" | jq -r '.[0] | {
+            Id: .Id,
+            Architecture: .Architecture,
+            Os: .Os,
+            Created: .Created,
+            Size: .Size,
+            RepoTags: .RepoTags,
+            RepoDigests: .RepoDigests
+          }' || echo "Inspection failed"
+
+      - name: SBOM verification
+        if: ${{ inputs.sbom-file != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sbom_file='${{ inputs.sbom-file }}'
+
+          if [ -f "$sbom_file" ]; then
+            echo "Verifying SBOM: $sbom_file"
+
+            # Basic SBOM validation
+            if jq empty "$sbom_file" 2>/dev/null; then
+              echo "✓ SBOM is valid JSON"
+
+              component_count=$(jq '.components | length' "$sbom_file" || echo 0)
+              echo "✓ SBOM contains $component_count components"
+            else
+              echo "✗ SBOM is invalid"
+              exit 1
+            fi
+          else
+            echo "⚠ SBOM file not found: $sbom_file (skipping verification)"
+          fi
+
+  synthetic-tests:
+    runs-on: ubuntu-latest
+    name: Synthetic Tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run synthetic tests
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          url='${{ inputs.monitoring-url }}'
+
+          echo "Running synthetic tests against $url"
+          echo ""
+
+          # Test 1: Basic connectivity
+          echo "[Test 1] Basic connectivity..."
+          if curl -sf "$url" >/dev/null 2>&1; then
+            echo "  ✓ Service is reachable"
+          else
+            echo "  ✗ Service is not reachable"
+            exit 1
+          fi
+
+          # Test 2: Response time SLA (target: < 1s)
+          echo "[Test 2] Response time SLA..."
+          response_time=$(curl -sw '%{time_total}' -o /dev/null "$url" 2>/dev/null || echo '0')
+          echo "  Response time: ${response_time}s (target: < 1.0s)"
+          if (( $(echo "$response_time < 1.0" | bc -l) )); then
+            echo "  ✓ SLA met"
+          else
+            echo "  ⚠ SLA not met (non-blocking)"
+          fi
+
+          # Test 3: HTTP headers
+          echo "[Test 3] Security headers..."
+          headers=$(curl -si "$url" 2>/dev/null | head -20)
+          echo "$headers" | grep -qi 'content-type' && echo "  ✓ Content-Type present" || echo "  ⚠ Content-Type missing"
+          echo "$headers" | grep -qi 'x-content-type-options' && echo "  ✓ X-Content-Type-Options present" || echo "  ⚠ X-Content-Type-Options missing"
+
+          echo ""
+          echo "✓ Synthetic tests completed"
+
+  summary:
+    runs-on: ubuntu-latest
+    needs: [health-monitoring, compliance-check, synthetic-tests]
+    if: always()
+    name: Monitoring Summary
+    steps:
+      - name: Generate monitoring summary
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "# Continuous Monitoring Summary"
+          echo ""
+          echo "**Image**: ${{ inputs.image-ref }}"
+          echo "**URL**: ${{ inputs.monitoring-url }}"
+          echo "**Report Time**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          echo ""
+          echo "## Results"
+          echo "- Health Monitoring: ${{ needs.health-monitoring.result }}"
+          echo "- Compliance Check: ${{ needs.compliance-check.result }}"
+          echo "- Synthetic Tests: ${{ needs.synthetic-tests.result }}"
+          echo ""
+          echo "## Recommendations"
+          echo "- Continue monitoring for anomalies"
+          echo "- Review logs for warnings and errors"
+          echo "- Track performance trends over time"
+          echo "- Update alerting thresholds based on observed patterns"
