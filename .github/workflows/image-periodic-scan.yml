@@ -52,12 +52,11 @@ jobs:
           echo "Scanning image: ${full_ref}"
 
       - name: Login to registry
-        if: ${{ inputs.registry != 'ghcr.io' }}
         uses: docker/login-action@v3
         with:
           registry: ${{ inputs.registry }}
-          username: ${{ secrets.REGISTRY_USERNAME }}
-          password: ${{ secrets.REGISTRY_PASSWORD }}
+          username: ${{ inputs.registry == 'ghcr.io' && github.actor || secrets.REGISTRY_USERNAME }}
+          password: ${{ inputs.registry == 'ghcr.io' && github.token || secrets.REGISTRY_PASSWORD }}
 
       - name: Pull image
         shell: bash
