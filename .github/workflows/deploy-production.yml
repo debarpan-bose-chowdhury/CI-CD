@@ -91,6 +91,14 @@ jobs:
 
           # Export current container state for rollback
           docker compose -f "$compose_file" ps "$compose_service" > /tmp/pre-deploy-state.log 2>&1 || true
+          previous_container_id="$(docker compose -f "$compose_file" ps -q "$compose_service" 2>/dev/null || true)"
+          if [ -n "$previous_container_id" ]; then
+            previous_image_ref="$(docker inspect --format='{{.Config.Image}}' "$previous_container_id" 2>/dev/null || true)"
+            if [ -n "$previous_image_ref" ]; then
+              printf '%s\n' "$previous_image_ref" > /tmp/pre-deploy-image-ref
+              echo "Captured previous image reference: $previous_image_ref"
+            fi
+          fi
           echo "✓ Current deployment state backed up"
 
       - name: Deploy via Docker Compose
@@ -169,8 +177,15 @@ jobs:
           compose_service='${{ inputs.compose-service }}'
 
           echo "Restoring previous deployment state..."
-          docker-compose -f "$compose_file" down || true
-          docker-compose -f "$compose_file" up -d "$compose_service" || true
+          previous_image_ref="$(cat /tmp/pre-deploy-image-ref 2>/dev/null || true)"
+          if [ -n "$previous_image_ref" ]; then
+            echo "Rolling back to image: $previous_image_ref"
+            export IMAGE_REF="$previous_image_ref"
+          else
+            echo "No captured previous image reference found; rolling back using compose defaults."
+          fi
+          docker compose -f "$compose_file" down || true
+          docker compose -f "$compose_file" up -d "$compose_service" || true
 
           echo "⚠ Rollback attempted. Manual verification required."
           exit 1
