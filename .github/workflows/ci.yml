@@ -147,8 +147,9 @@ jobs:
       - shell: bash
         working-directory: ${{ inputs.dotnet-project }}
         run: |
-          if [ -n '${{ inputs.dotnet-test-command }}' ]; then
-            eval '${{ inputs.dotnet-test-command }}'
+          cmd="${{ inputs.dotnet-test-command }}"
+          if [ -n "$cmd" ]; then
+            bash -lc "$cmd"
           else
             dotnet test --no-build -c Release --collect:'XPlat Code Coverage'
           fi
