@@ -83,7 +83,7 @@ jobs:
       environment-name: production
       compose-file: docker-compose.yml
       compose-service: app
-      health-check-url: http://app/health
+      health-check-url: http://localhost:8080/health
 
   continuous-monitoring:
     name: Continuous Monitoring
@@ -92,7 +92,7 @@ jobs:
     uses: ./.github/workflows/continuous-monitoring.yml
     with:
       image-ref: ${{ needs.docker_build.outputs.image-ref }}
-      monitoring-url: http://app/health
+      monitoring-url: http://localhost:8080/health
       check-interval: '60'
       max-checks: '3'
 
