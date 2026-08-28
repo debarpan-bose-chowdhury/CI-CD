@@ -98,13 +98,8 @@ jobs:
 
           echo "Current version: $current_version"
 
-          # Parse merge commit message (from the triggering PR)
-          # Get last merge commit
-          merge_commit=$(git log --merges --oneline -n 1 --pretty=format:%H)
-          if [ -z "$merge_commit" ]; then
-            echo "WARNING: No merge commit found, using HEAD" >&2
-            merge_commit='HEAD'
-          fi
+          # Use the HEAD commit message for the push to the base branch.
+          merge_commit='HEAD'
 
           # Get commit message
           commit_msg=$(git log -1 --pretty=format:%b "$merge_commit")
