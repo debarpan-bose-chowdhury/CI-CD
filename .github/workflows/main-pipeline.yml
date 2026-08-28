@@ -99,7 +99,7 @@ jobs:
   version-bump:
     name: Version Bump
     needs: ci
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'chore(release): bump version')
     uses: ./.github/workflows/version-bump.yml
     with:
       language: auto
