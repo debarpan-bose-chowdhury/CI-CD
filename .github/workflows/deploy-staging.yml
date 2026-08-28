@@ -80,7 +80,7 @@ jobs:
           done
 
           echo "✗ Health check failed after $max_retries attempts" >&2
-          docker-compose -f '${{ inputs.compose-file }}' logs
+          docker compose -f '${{ inputs.compose-file }}' logs
           exit 1
 
       - name: Log deployment status
