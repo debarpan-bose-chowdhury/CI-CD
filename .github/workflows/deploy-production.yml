@@ -148,9 +148,12 @@ jobs:
           set -euo pipefail
           endpoints=(/health /api/status)
 
+          base_url='${{ inputs.health-check-url }}'
+          base_url="${base_url%/health}"
+
           echo "Running smoke tests..."
           for endpoint in "${endpoints[@]}"; do
-            response_code=$(curl -sw '%{http_code}' -o /dev/null '${{ inputs.health-check-url }}'${endpoint#/health} 2>/dev/null || echo '000')
+            response_code=$(curl -sw '%{http_code}' -o /dev/null "${base_url}${endpoint}" 2>/dev/null || echo '000')
             if [ "$response_code" -ge 200 ] && [ "$response_code" -lt 400 ]; then
               echo "  ✓ ${endpoint}: HTTP $response_code"
             else
