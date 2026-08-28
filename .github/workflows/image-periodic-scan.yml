@@ -77,8 +77,7 @@ jobs:
           # Run vulnerability scan with JSON output
           grype "$image_ref" \
             -o json \
-            > vulnerabilities.json 2>&1 || echo "Scan completed with non-zero exit (expected if vulnerabilities found)"
-
+            > vulnerabilities.json || echo "Scan completed with non-zero exit (expected if vulnerabilities found)"
           # Count vulnerabilities by severity
           python3 << 'PYTHON_EOF'
           import json
