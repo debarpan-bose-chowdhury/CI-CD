@@ -90,7 +90,7 @@ jobs:
           compose_service='${{ inputs.compose-service }}'
 
           # Export current container state for rollback
-          docker-compose -f "$compose_file" ps "$compose_service" > /tmp/pre-deploy-state.log 2>&1 || true
+          docker compose -f "$compose_file" ps "$compose_service" > /tmp/pre-deploy-state.log 2>&1 || true
           echo "✓ Current deployment state backed up"
 
       - name: Deploy via Docker Compose
@@ -102,9 +102,9 @@ jobs:
           compose_service='${{ inputs.compose-service }}'
 
           echo "Deploying ${compose_service}..."
-          docker-compose -f "$compose_file" pull
-          docker-compose -f "$compose_file" down
-          docker-compose -f "$compose_file" up -d "$compose_service"
+          docker compose -f "$compose_file" pull
+          docker compose -f "$compose_file" down
+          docker compose -f "$compose_file" up -d "$compose_service"
 
           echo "✓ Deployment complete"
 
