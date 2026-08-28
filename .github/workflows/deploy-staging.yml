@@ -55,11 +55,10 @@ jobs:
           export IMAGE_REF='${{ inputs.image-ref }}'
 
           # Stop and remove old containers
-          docker-compose -f '${{ inputs.compose-file }}' down || true
+          docker compose -f '${{ inputs.compose-file }}' down || true
 
           # Start new deployment
-          docker-compose -f '${{ inputs.compose-file }}' up -d '${{ inputs.compose-service }}'
-
+          docker compose -f '${{ inputs.compose-file }}' up -d '${{ inputs.compose-service }}'
       - name: Wait for health check
         shell: bash
         run: |
