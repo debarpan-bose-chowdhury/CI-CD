@@ -181,7 +181,7 @@ jobs:
 
           threshold = os.environ.get('THRESHOLD', 'medium').lower()
           severity_order = ['info', 'low', 'medium', 'high', 'critical']
-          threshold_level = {'low': 1, 'medium': 2, 'high': 3, 'critical': 4}.get(threshold, 2)
+          threshold_level = severity_order.index(threshold) if threshold in severity_order else severity_order.index('medium')
 
           with open('zap-report.json', 'r', encoding='utf-8') as f:
               data = json.load(f)
@@ -198,9 +198,8 @@ jobs:
           for sev in severity_order:
               print(f"  {sev.capitalize()}: {severity_counts[sev]}")
 
-          blocking_severities = severity_order[threshold_level - 1:]
+          blocking_severities = severity_order[threshold_level:]
           blocking_count = sum(severity_counts[s] for s in blocking_severities)
-
           if blocking_count > 0:
               print(f"\n✗ DAST scan FAILED: {blocking_count} finding(s) at or above threshold")
               sys.exit(1)
