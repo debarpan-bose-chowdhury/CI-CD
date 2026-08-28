@@ -27,8 +27,8 @@ on:
 
 permissions:
   contents: read
+  packages: read
   deployments: write
-
 jobs:
   pre-deploy-check:
     name: Pre-deployment Checks
