@@ -48,7 +48,7 @@ jobs:
       environment-name: staging
       compose-file: docker-compose.staging.yml
       compose-service: app
-      health-check-url: http://staging-app/health
+      health-check-url: http://localhost:8080/health
 
   dast-scan:
     name: DAST Security Scan
@@ -56,7 +56,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: ./.github/workflows/dast-smoke.yml
     with:
-      target-url: http://staging-app:8080
+      target-url: http://localhost:8080
       dast-threshold: medium
       smoke-endpoints: /health,/api/status
 
