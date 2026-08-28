@@ -23,7 +23,7 @@ on:
         default: ''
       dotnet-version:
         type: string
-        default: 8.0
+        default: '8.0'
       python-version:
         type: string
         default: '3.12'
@@ -143,9 +143,9 @@ jobs:
             ${{ inputs.registry }}/${{ github.repository_owner }}/${{ steps.meta.outputs.image-name }}:latest
           provenance: true
           sbom: true
-              cache-from: type=registry,ref=${{ inputs.registry }}/${{ github.repository_owner }}/${{ steps.meta.outputs.image-name }}:buildcache
-              cache-to: type=registry,ref=${{ inputs.registry }}/${{ github.repository_owner }}/${{ steps.meta.outputs.image-name }}:buildcache,mode=max
-              platforms: linux/amd64,linux/arm64
-              build-args: |
-                DOTNET_VERSION=${{ inputs.dotnet-version }}
-                PYTHON_VERSION=${{ inputs.python-version }}
+          cache-from: type=registry,ref=${{ inputs.registry }}/${{ github.repository_owner }}/${{ steps.meta.outputs.image-name }}:buildcache
+          cache-to: type=registry,ref=${{ inputs.registry }}/${{ github.repository_owner }}/${{ steps.meta.outputs.image-name }}:buildcache,mode=max
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            DOTNET_VERSION=${{ inputs.dotnet-version }}
+            PYTHON_VERSION=${{ inputs.python-version }}

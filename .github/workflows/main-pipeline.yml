@@ -24,11 +24,8 @@ jobs:
       dotnet-version: '8.0.x'
       python-version: '3.12'
       run-sonarqube: false
-    secrets:
-      sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
-      sonar-token: ${{ secrets.SONAR_TOKEN }}
 
-  docker-build:
+  docker_build:
     name: Build & Push Docker Image
     needs: ci
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -43,11 +40,11 @@ jobs:
 
   deploy-staging:
     name: Deploy to Staging
-    needs: docker-build
+    needs: docker_build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: ./.github/workflows/deploy-staging.yml
     with:
-      image-ref: ${{ needs.docker-build.outputs.image-ref }}
+      image-ref: ${{ needs.docker_build.outputs.image-ref }}
       environment-name: staging
       compose-file: docker-compose.staging.yml
       compose-service: app
@@ -78,11 +75,11 @@ jobs:
 
   deploy-production:
     name: Deploy to Production
-    needs: [docker-build, approval-gate]
+    needs: [docker_build, approval-gate]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: ./.github/workflows/deploy-production.yml
     with:
-      image-ref: ${{ needs.docker-build.outputs.image-ref }}
+      image-ref: ${{ needs.docker_build.outputs.image-ref }}
       environment-name: production
       compose-file: docker-compose.yml
       compose-service: app
@@ -90,11 +87,11 @@ jobs:
 
   continuous-monitoring:
     name: Continuous Monitoring
-    needs: deploy-production
+    needs: [deploy-production, docker_build]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: ./.github/workflows/continuous-monitoring.yml
     with:
-      image-ref: ${{ needs.docker-build.outputs.image-ref }}
+      image-ref: ${{ needs.docker_build.outputs.image-ref }}
       monitoring-url: http://app/health
       check-interval: '60'
       max-checks: '3'
@@ -118,5 +115,3 @@ jobs:
     with:
       language: auto
       release-notes-file: CHANGELOG.md
-    secrets:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

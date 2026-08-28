@@ -36,6 +36,7 @@ on:
       sonar-project-key:
         type: string
         default: ''
+    secrets:
       sonar-host-url:
         required: false
       sonar-token:
@@ -127,6 +128,8 @@ jobs:
           name: sbom-cyclonedx
           path: sbom.json
           retention-days: 30
+
+  dotnet:
     needs: detect
     if: needs.detect.outputs.dotnet == 'true'
     runs-on: ubuntu-latest
@@ -153,15 +156,15 @@ jobs:
         shell: bash
         run: ${{ inputs.lint-command }}
       - if: ${{ inputs.run-sonarqube }}
-       uses: SonarSource/sonarqube-scan-action@master
-       env:
-         SONAR_HOST_URL: ${{ secrets.sonar-host-url }}
-         SONAR_TOKEN: ${{ secrets.sonar-token }}
-       with:
-         args: >
-           -Dsonar.projectKey=${{ inputs.sonar-project-key }}
-           -Dsonar.sources=.
-           -Dsonar.language=cs
+        uses: SonarSource/sonarqube-scan-action@master
+        env:
+          SONAR_HOST_URL: ${{ secrets.sonar-host-url }}
+          SONAR_TOKEN: ${{ secrets.sonar-token }}
+        with:
+          args: >
+            -Dsonar.projectKey=${{ inputs.sonar-project-key }}
+            -Dsonar.sources=.
+            -Dsonar.language=cs
 
   python:
     needs: detect
@@ -197,12 +200,12 @@ jobs:
         shell: bash
         run: ${{ inputs.lint-command }}
       - if: ${{ inputs.run-sonarqube }}
-       uses: SonarSource/sonarqube-scan-action@master
-       env:
-         SONAR_HOST_URL: ${{ secrets.sonar-host-url }}
-         SONAR_TOKEN: ${{ secrets.sonar-token }}
-       with:
-         args: >
-           -Dsonar.projectKey=${{ inputs.sonar-project-key }}
-           -Dsonar.sources=.
-           -Dsonar.language=py
+        uses: SonarSource/sonarqube-scan-action@master
+        env:
+          SONAR_HOST_URL: ${{ secrets.sonar-host-url }}
+          SONAR_TOKEN: ${{ secrets.sonar-token }}
+        with:
+          args: >
+            -Dsonar.projectKey=${{ inputs.sonar-project-key }}
+            -Dsonar.sources=.
+            -Dsonar.language=py
