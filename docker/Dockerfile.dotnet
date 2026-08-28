@@ -17,7 +17,7 @@ COPY --from=build /app/publish/ ./
 RUN set -eu; dll=''; \
     for candidate in /app/*.dll; do \
         [ -f "$candidate" ] || continue; \
-        case "$candidate" in *Test*.dll|*Tests*.dll) continue ;; esac; \
+        case "$candidate" in *.Test.dll|*.Test.*.dll|*.Tests.dll|*.Tests.*.dll) continue ;; esac; \
         dll="${candidate##*/}"; break; \
     done; \
     if [ -z "$dll" ]; then echo 'Unable to find published .NET assembly.' >&2; exit 1; fi; \
