@@ -26,6 +26,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "Validating workflow YAML files..."
+          python3 -m pip install --disable-pip-version-check -q pyyaml
           
           # Check all workflow files are valid YAML
           for file in .github/workflows/*.yml; do
