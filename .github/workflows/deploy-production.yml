@@ -44,7 +44,7 @@ jobs:
           echo "Verifying image: ${image_ref}"
 
           # Use docker to check if image exists
-          docker pull "${image_ref}" --dry-run 2>/dev/null || exit 1
+          docker manifest inspect "${image_ref}" >/dev/null 2>&1 || exit 1
           echo "✓ Image verified in registry"
 
       - name: Verify deployment configuration
