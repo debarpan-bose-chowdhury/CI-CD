@@ -17,6 +17,17 @@ on:
         type: boolean
         default: false
         description: 'Fail workflow if critical vulnerabilities found'
+    secrets:
+      REGISTRY_USERNAME:
+        required: false
+      REGISTRY_PASSWORD:
+        required: false
+
+permissions:
+  contents: read
+  packages: read
+  security-events: write
+  issues: write
 
 jobs:
   scan-image:
