@@ -223,11 +223,8 @@ jobs:
           - **New version**: ${new_version}
           - **Bump type**: ${bump_type}
 
-          This PR updates version files. After merge, the release-tag workflow will automatically create a release tag.
-
           **Automated by**: version-bump workflow" \
-            --label "release" \
-            --auto-merge || echo "PR creation failed or already exists"
+            --label "release" || echo "PR creation failed or already exists"
 
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
