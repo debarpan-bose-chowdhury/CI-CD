@@ -188,8 +188,7 @@ jobs:
 
           gh release create "$tag_name" \
             --title "Release $version" \
-            --notes-file /tmp/release-notes.md \
-            --generate-notes || echo "Release creation failed or already exists"
+            --notes-file /tmp/release-notes.md || echo "Release creation failed or already exists"
 
         env:
           GH_TOKEN: ${{ github.token }}
