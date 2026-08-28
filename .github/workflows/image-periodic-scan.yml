@@ -11,28 +11,19 @@ on:
         required: true
       tags-to-scan:
         type: string
-        default: latest
+        default: '["latest"]'
+        description: 'JSON array of tags to scan, e.g. ["latest","v1.0.0"]'
       fail-on-critical:
         type: boolean
         default: false
         description: 'Fail workflow if critical vulnerabilities found'
-    secrets:
-      REGISTRY_USERNAME:
-        required: false
-      REGISTRY_PASSWORD:
-        required: false
-
-permissions:
-  contents: read
-  security-events: write
-  issues: write
 
 jobs:
   scan-image:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        tag: ${{ fromJSON(format('[{0}]', github.event.inputs.tags-to-scan || 'latest')) }}
+        tag: ${{ fromJSON(inputs.tags-to-scan) }}
     steps:
       - uses: actions/checkout@v4
 
