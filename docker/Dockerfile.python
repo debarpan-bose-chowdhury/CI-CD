@@ -5,11 +5,11 @@ FROM python:${PYTHON_VERSION}-slim AS build
 WORKDIR /src
 COPY . .
 # hadolint ignore=DL3013
-RUN python -m pip install --no-cache-dir --upgrade pip wheel setuptools
+RUN python -m pip install --only-binary :all: --require-hashes --no-cache-dir --upgrade pip wheel setuptools
 RUN set -eu; \
-    if [ -f requirements-dev.txt ]; then pip install --no-cache-dir --prefix=/install -r requirements-dev.txt; \
-    elif [ -f requirements.txt ]; then pip install --no-cache-dir --prefix=/install -r requirements.txt; \
-    else pip install --no-cache-dir --prefix=/install .; fi
+    if [ -f requirements-dev.txt ]; then pip install --only-binary :all: --require-hashes --no-cache-dir --prefix=/install -r requirements-dev.txt; \
+    elif [ -f requirements.txt ]; then pip install --only-binary :all: --require-hashes --no-cache-dir --prefix=/install -r requirements.txt; \
+    else pip install --only-binary :all: --require-hashes --no-cache-dir --prefix=/install .; fi
 
 FROM python:${PYTHON_VERSION}-slim AS runtime
 ARG APP_PORT=8080
