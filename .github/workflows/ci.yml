@@ -157,7 +157,7 @@ jobs:
         shell: bash
         run: ${{ inputs.lint-command }}
       - if: ${{ inputs.run-sonarqube }}
-        uses: SonarSource/sonarqube-scan-action@master
+        uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
         env:
           SONAR_HOST_URL: ${{ secrets.sonar-host-url }}
           SONAR_TOKEN: ${{ secrets.sonar-token }}
@@ -165,7 +165,6 @@ jobs:
           args: >
             -Dsonar.projectKey=${{ inputs.sonar-project-key }}
             -Dsonar.sources=.
-            -Dsonar.language=cs
 
   python:
     needs: detect
@@ -201,7 +200,7 @@ jobs:
         shell: bash
         run: ${{ inputs.lint-command }}
       - if: ${{ inputs.run-sonarqube }}
-        uses: SonarSource/sonarqube-scan-action@master
+        uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
         env:
           SONAR_HOST_URL: ${{ secrets.sonar-host-url }}
           SONAR_TOKEN: ${{ secrets.sonar-token }}
@@ -209,4 +208,3 @@ jobs:
           args: >
             -Dsonar.projectKey=${{ inputs.sonar-project-key }}
             -Dsonar.sources=.
-            -Dsonar.language=py
