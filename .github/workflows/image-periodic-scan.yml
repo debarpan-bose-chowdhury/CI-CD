@@ -36,7 +36,7 @@ jobs:
       matrix:
         tag: ${{ fromJSON(inputs.tags-to-scan) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Setup image reference
         id: image-ref

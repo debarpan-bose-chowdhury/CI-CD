@@ -12,21 +12,20 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   validate-workflows:
     name: Validate YAML Syntax
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Validate workflow YAML
         shell: bash
         run: |
           set -euo pipefail
           echo "Validating workflow YAML files..."
-          python3 -m pip install --disable-pip-version-check -q pyyaml
+          python3 -m pip install --require-hashes --disable-pip-version-check -q pyyaml
           
           # Check all workflow files are valid YAML
           for file in .github/workflows/*.yml; do
@@ -63,16 +62,16 @@ jobs:
     name: Lint Dockerfiles
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Lint Dockerfile.dotnet
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387
         with:
           dockerfile: docker/Dockerfile.dotnet
           ignore: DL3006,DL3008
 
       - name: Lint Dockerfile.python
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387
         with:
           dockerfile: docker/Dockerfile.python
           ignore: DL3006,DL3008
@@ -81,7 +80,7 @@ jobs:
     name: Test .NET Workflow (Dry Run)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Validate .NET example workflow
         shell: bash
@@ -111,7 +110,7 @@ jobs:
     name: Test Python Workflow (Dry Run)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Validate Python example workflow
         shell: bash
@@ -141,7 +140,7 @@ jobs:
     name: Check Documentation Completeness
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Verify README
         shell: bash
@@ -183,7 +182,7 @@ jobs:
     name: Integration Test (Minimal CI)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Test language detection
         shell: bash
@@ -276,7 +275,7 @@ jobs:
     needs: [validate-workflows, lint-dockerfiles, test-dotnet-workflow, test-python-workflow, check-documentation, integration-test]
     if: always()
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Summary Report
         shell: bash

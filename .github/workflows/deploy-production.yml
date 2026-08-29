@@ -34,7 +34,7 @@ jobs:
     name: Pre-deployment Checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Login to GHCR (for private images)
         if: ${{ startsWith(inputs.image-ref, 'ghcr.io/') }}
@@ -71,7 +71,7 @@ jobs:
     environment: ${{ inputs.environment-name }}
     name: Deploy to Production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Create deployment record
         shell: bash

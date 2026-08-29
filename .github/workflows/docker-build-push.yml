@@ -42,7 +42,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   detect:
@@ -51,8 +50,8 @@ jobs:
       language: ${{ steps.detect.outputs.language }}
       dockerfile: ${{ steps.detect.outputs.dockerfile }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           repository: ${{ github.repository_owner }}/CI-CD
           path: .ci-cd-templates
@@ -104,8 +103,8 @@ jobs:
       image-ref: ${{ steps.meta.outputs.image-ref }}
       image-digest: ${{ steps.build.outputs.digest }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           repository: ${{ github.repository_owner }}/CI-CD
           path: .ci-cd-templates

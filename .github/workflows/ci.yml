@@ -59,7 +59,7 @@ jobs:
       dotnet: ${{ steps.detect.outputs.dotnet }}
       python: ${{ steps.detect.outputs.python }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - id: detect
         shell: bash
@@ -106,7 +106,7 @@ jobs:
     permissions:
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: github/codeql-action/init@v3
         with:
           languages: 'cpp,csharp,go,java,javascript,python,ruby'
@@ -118,7 +118,7 @@ jobs:
     outputs:
       sbom-file: sbom.json
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26
         with:
           format: cyclonedx-json
@@ -134,7 +134,7 @@ jobs:
     if: needs.detect.outputs.dotnet == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ inputs.dotnet-version }}
@@ -171,7 +171,7 @@ jobs:
     if: needs.detect.outputs.python == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ inputs.python-version }}
