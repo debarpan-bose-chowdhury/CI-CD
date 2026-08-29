@@ -119,7 +119,7 @@ jobs:
       sbom-file: sbom.json
     steps:
       - uses: actions/checkout@v4
-      - uses: anchore/sbom-action@v0
+      - uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26
         with:
           format: cyclonedx-json
           output-file: sbom.json
@@ -178,15 +178,15 @@ jobs:
       - shell: bash
         working-directory: ${{ inputs.python-workdir }}
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --require-hashes --upgrade pip
           if [ -n '${{ inputs.python-install-command }}' ]; then
             eval '${{ inputs.python-install-command }}'
           elif [ -f requirements-dev.txt ]; then
-            pip install -r requirements-dev.txt
+            pip install --only-binary :all: --require-hashes -r requirements-dev.txt
           elif [ -f requirements.txt ]; then
-            pip install -r requirements.txt
+            pip install --only-binary :all: --require-hashes -r requirements.txt
           else
-            pip install -e .
+            pip install --only-binary :all: --require-hashes -e .
           fi
       - shell: bash
         working-directory: ${{ inputs.python-workdir }}
