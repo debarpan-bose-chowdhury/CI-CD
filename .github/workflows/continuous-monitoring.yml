@@ -24,16 +24,15 @@ on:
       API_KEY:
         required: false
 
-permissions:
-  contents: read
-  deployments: write
-
 jobs:
   health-monitoring:
+    permissions:
+      contents: read
+      deployments: write
     runs-on: ubuntu-latest
     name: Runtime Health Monitoring
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Perform health checks
         id: health
@@ -113,7 +112,7 @@ jobs:
           cat monitoring-report.md
 
       - name: Upload monitoring report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: monitoring-report
           path: monitoring-report.md
@@ -123,7 +122,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Container Compliance Check
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Verify image metadata
         shell: bash
@@ -181,7 +180,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Synthetic Tests
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Run synthetic tests
         shell: bash

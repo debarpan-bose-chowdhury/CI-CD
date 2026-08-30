@@ -28,13 +28,12 @@ on:
 permissions:
   contents: read
   packages: read
-  deployments: write
 jobs:
   pre-deploy-check:
     name: Pre-deployment Checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Login to GHCR (for private images)
         if: ${{ startsWith(inputs.image-ref, 'ghcr.io/') }}
@@ -68,10 +67,12 @@ jobs:
   deploy:
     needs: pre-deploy-check
     runs-on: ubuntu-latest
+    permissions:
+      deployments: write
     environment: ${{ inputs.environment-name }}
     name: Deploy to Production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Create deployment record
         shell: bash

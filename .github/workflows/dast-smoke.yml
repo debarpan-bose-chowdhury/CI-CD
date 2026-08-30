@@ -20,14 +20,12 @@ on:
       DAST_PASSWORD:
         required: false
 
-permissions:
-  contents: read
-  security-events: write
-
 jobs:
   smoke-test:
     runs-on: ubuntu-latest
     name: Smoke Tests
+    permissions:
+      contents: read
     steps:
       - name: Test health endpoints
         shell: bash
@@ -78,8 +76,10 @@ jobs:
   dast-scan:
     runs-on: ubuntu-latest
     name: DAST (OWASP ZAP)
+    permissions:
+      security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Run OWASP ZAP scan
         shell: bash
@@ -148,7 +148,7 @@ jobs:
 
       - name: Upload OWASP ZAP reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: zap-scan-reports
           path: |
@@ -211,7 +211,7 @@ jobs:
 
       - name: Upload to GitHub Security
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938
         with:
           sarif_file: zap-report.sarif
           category: 'DAST-OWASP-ZAP'

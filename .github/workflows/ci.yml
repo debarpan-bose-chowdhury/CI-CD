@@ -47,19 +47,17 @@ on:
       sbom-artifact:
         value: ${{ jobs.sbom.outputs.sbom-file }}
 
-permissions:
-  contents: read
-  security-events: write
-
 jobs:
   detect:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       language: ${{ steps.detect.outputs.language }}
       dotnet: ${{ steps.detect.outputs.dotnet }}
       python: ${{ steps.detect.outputs.python }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - id: detect
         shell: bash
@@ -106,24 +104,26 @@ jobs:
     permissions:
       security-events: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938
         with:
           languages: 'cpp,csharp,go,java,javascript,python,ruby'
-      - uses: github/codeql-action/autobuild@v3
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/autobuild@cdf488f595d80d6e07e03d4674febd5ab45fa938
+      - uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938
 
   sbom:
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
     outputs:
       sbom-file: sbom.json
     steps:
-      - uses: actions/checkout@v4
-      - uses: anchore/sbom-action@v0
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26
         with:
           format: cyclonedx-json
           output-file: sbom.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: sbom-cyclonedx
           path: sbom.json
@@ -133,9 +133,11 @@ jobs:
     needs: detect
     if: needs.detect.outputs.dotnet == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
         with:
           dotnet-version: ${{ inputs.dotnet-version }}
       - shell: bash
@@ -157,7 +159,7 @@ jobs:
         shell: bash
         run: ${{ inputs.lint-command }}
       - if: ${{ inputs.run-sonarqube }}
-        uses: SonarSource/sonarqube-scan-action@master
+        uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
         env:
           SONAR_HOST_URL: ${{ secrets.sonar-host-url }}
           SONAR_TOKEN: ${{ secrets.sonar-token }}
@@ -165,29 +167,30 @@ jobs:
           args: >
             -Dsonar.projectKey=${{ inputs.sonar-project-key }}
             -Dsonar.sources=.
-            -Dsonar.language=cs
 
   python:
     needs: detect
     if: needs.detect.outputs.python == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: ${{ inputs.python-version }}
       - shell: bash
         working-directory: ${{ inputs.python-workdir }}
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --require-hashes --upgrade pip
           if [ -n '${{ inputs.python-install-command }}' ]; then
             eval '${{ inputs.python-install-command }}'
           elif [ -f requirements-dev.txt ]; then
-            pip install -r requirements-dev.txt
+            pip install --only-binary :all: --require-hashes -r requirements-dev.txt
           elif [ -f requirements.txt ]; then
-            pip install -r requirements.txt
+            pip install --only-binary :all: --require-hashes -r requirements.txt
           else
-            pip install -e .
+            pip install --only-binary :all: --require-hashes -e .
           fi
       - shell: bash
         working-directory: ${{ inputs.python-workdir }}
@@ -201,7 +204,7 @@ jobs:
         shell: bash
         run: ${{ inputs.lint-command }}
       - if: ${{ inputs.run-sonarqube }}
-        uses: SonarSource/sonarqube-scan-action@master
+        uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
         env:
           SONAR_HOST_URL: ${{ secrets.sonar-host-url }}
           SONAR_TOKEN: ${{ secrets.sonar-token }}
@@ -209,4 +212,3 @@ jobs:
           args: >
             -Dsonar.projectKey=${{ inputs.sonar-project-key }}
             -Dsonar.sources=.
-            -Dsonar.language=py
