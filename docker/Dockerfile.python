@@ -15,7 +15,9 @@ FROM python:${PYTHON_VERSION}-slim AS runtime
 ARG APP_PORT=8080
 ARG APP_MODULE=
 WORKDIR /app
-RUN addgroup --system appgroup && adduser --system --ingroup appgroup --no-create-home appuser && chown -R appuser:appgroup /app
+RUN addgroup --system --gid 10001 appgroup && \
+    adduser --system --uid 10001 --ingroup appgroup --no-create-home appuser && \
+    chown -R 10001:10001 /app
 COPY --from=build /install /usr/local
 COPY --from=build /src /app
 RUN printf '%s\n' \
@@ -33,5 +35,5 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PORT=${APP_PORT}
 EXPOSE ${APP_PORT}
-USER appuser
+USER 10001:10001
 ENTRYPOINT ["/app/start.sh"]
