@@ -148,7 +148,7 @@ jobs:
 
       - name: Upload OWASP ZAP reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: zap-scan-reports
           path: |
@@ -211,7 +211,7 @@ jobs:
 
       - name: Upload to GitHub Security
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938
         with:
           sarif_file: zap-report.sarif
           category: 'DAST-OWASP-ZAP'

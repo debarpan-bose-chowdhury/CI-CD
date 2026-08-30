@@ -69,7 +69,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --proto "=https" --tlsv1.2 -sSf https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+          grype_installer="/tmp/grype-install.sh"
+          curl --proto "=https" --tlsv1.2 -fsSL \
+            https://raw.githubusercontent.com/anchore/grype/main/install.sh \
+            -o "${grype_installer}"
+
+          test -s "${grype_installer}"
+          grep -q "grype" "${grype_installer}"
+          sh "${grype_installer}" -b /usr/local/bin
           echo "✓ Grype installed"
 
       - name: Generate SBOM and scan
