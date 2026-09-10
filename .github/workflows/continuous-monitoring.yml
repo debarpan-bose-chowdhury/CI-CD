@@ -111,7 +111,7 @@ jobs:
               status='✓'
             else
               status='✗'
-              ((failed_checks++))
+              failed_checks=$((failed_checks + 1))
             fi
 
             echo "[$timestamp] Check $i/$max_checks: HTTP $response_code | ${response_time}s | $status"
