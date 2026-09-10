@@ -155,3 +155,5 @@ jobs:
           build-args: |
             DOTNET_VERSION=${{ inputs.dotnet-version }}
             PYTHON_VERSION=${{ inputs.python-version }}
+          cache-from: type=registry,ref=${{ inputs.registry }}/${{ github.repository_owner }}/${{ steps.meta.outputs.image-name }}:buildcache
+          cache-to: type=registry,ref=${{ inputs.registry }}/${{ github.repository_owner }}/${{ steps.meta.outputs.image-name }}:buildcache,mode=max
