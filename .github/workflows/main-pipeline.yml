@@ -44,7 +44,8 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: ./.github/workflows/deploy-staging.yml
     with:
-      image-ref: ${{ needs.docker_build.outputs.image-ref }}
+      registry: ghcr.io
+      image-tag: ${{ github.sha }}
       environment-name: staging
       compose-file: docker-compose.staging.yml
       compose-service: app
@@ -79,7 +80,8 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: ./.github/workflows/deploy-production.yml
     with:
-      image-ref: ${{ needs.docker_build.outputs.image-ref }}
+      registry: ghcr.io
+      image-tag: ${{ github.sha }}
       environment-name: production
       compose-file: docker-compose.yml
       compose-service: app
@@ -91,7 +93,8 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: ./.github/workflows/continuous-monitoring.yml
     with:
-      image-ref: ${{ needs.docker_build.outputs.image-ref }}
+      registry: ghcr.io
+      image-tag: ${{ github.sha }}
       monitoring-url: http://localhost:8080/health
       check-interval: '60'
       max-checks: '3'

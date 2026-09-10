@@ -234,7 +234,10 @@ git push origin main
 ### Deploy Staging (deploy-staging.yml)
 
 ```yaml
-- image-ref: (required)                    # Full image reference
+- image-ref: ''                            # Optional full image reference override
+- registry: 'ghcr.io'                      # Used when image-ref is omitted
+- image-name: ''                           # Defaults to repo name (lowercased)
+- image-tag: ''                            # Defaults to github.sha
 - environment-name: 'staging'
 - compose-file: 'docker-compose.staging.yml'
 - compose-service: 'app'
@@ -285,7 +288,10 @@ Same as staging (use production environment credentials).
 ### Continuous Monitoring (continuous-monitoring.yml)
 
 ```yaml
-- image-ref: (required)
+- image-ref: ''                            # Optional full image reference override
+- registry: 'ghcr.io'                      # Used when image-ref is omitted
+- image-name: ''                           # Defaults to repo name (lowercased)
+- image-tag: ''                            # Defaults to github.sha
 - monitoring-url: 'http://localhost/health'
 - check-interval: '60'                     # seconds
 - max-checks: '3'

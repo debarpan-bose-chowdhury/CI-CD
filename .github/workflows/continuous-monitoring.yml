@@ -5,7 +5,16 @@ on:
     inputs:
       image-ref:
         type: string
-        required: true
+        default: ''
+      registry:
+        type: string
+        default: ghcr.io
+      image-name:
+        type: string
+        default: ''
+      image-tag:
+        type: string
+        default: ''
       monitoring-url:
         type: string
         default: 'http://localhost/health'
@@ -33,6 +42,30 @@ jobs:
     name: Runtime Health Monitoring
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Resolve image reference
+        id: resolve-image
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_ref='${{ inputs.image-ref }}'
+          if [ -z "$image_ref" ]; then
+            image_name='${{ inputs.image-name }}'
+            if [ -z "$image_name" ]; then
+              image_name='${{ github.event.repository.name }}'
+            fi
+            image_name=$(printf '%s' "$image_name" | tr '[:upper:]' '[:lower:]')
+            image_tag='${{ inputs.image-tag }}'
+            if [ -z "$image_tag" ]; then
+              image_tag='${{ github.sha }}'
+            fi
+            registry='${{ inputs.registry }}'
+            image_ref="${registry}/${{ github.repository_owner }}/$image_name:$image_tag"
+          else
+            registry="${image_ref%%/*}"
+          fi
+          echo "image-ref=$image_ref" >> "$GITHUB_OUTPUT"
+          echo "registry=$registry" >> "$GITHUB_OUTPUT"
 
       - name: Perform health checks
         id: health
@@ -83,7 +116,7 @@ jobs:
           cat > monitoring-report.md << 'EOF'
           # Runtime Monitoring Report
 
-          **Image**: ${{ inputs.image-ref }}
+          **Image**: ${{ steps.resolve-image.outputs.image-ref }}
           **URL**: ${{ inputs.monitoring-url }}
           **Timestamp**: $(date -u +'%Y-%m-%dT%H:%M:%SZ')
 
@@ -124,11 +157,40 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
-      - name: Verify image metadata
+      - name: Resolve image reference
+        id: resolve-image
         shell: bash
         run: |
           set -euo pipefail
           image_ref='${{ inputs.image-ref }}'
+          if [ -z "$image_ref" ]; then
+            image_name='${{ inputs.image-name }}'
+            if [ -z "$image_name" ]; then
+              image_name='${{ github.event.repository.name }}'
+            fi
+            image_name=$(printf '%s' "$image_name" | tr '[:upper:]' '[:lower:]')
+            image_tag='${{ inputs.image-tag }}'
+            if [ -z "$image_tag" ]; then
+              image_tag='${{ github.sha }}'
+            fi
+            registry='${{ inputs.registry }}'
+            image_ref="${registry}/${{ github.repository_owner }}/$image_name:$image_tag"
+          else
+            registry="${image_ref%%/*}"
+          fi
+          echo "image-ref=$image_ref" >> "$GITHUB_OUTPUT"
+          echo "registry=$registry" >> "$GITHUB_OUTPUT"
+
+      - name: Login to GHCR (for private images)
+        if: ${{ steps.resolve-image.outputs.registry == 'ghcr.io' }}
+        shell: bash
+        run: echo '${{ github.token }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+
+      - name: Verify image metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_ref='${{ steps.resolve-image.outputs.image-ref }}'
 
           echo "Checking container compliance..."
           echo "Image: $image_ref"
@@ -226,6 +288,29 @@ jobs:
     if: always()
     name: Monitoring Summary
     steps:
+      - name: Resolve image reference
+        id: resolve-image
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_ref='${{ inputs.image-ref }}'
+          if [ -z "$image_ref" ]; then
+            image_name='${{ inputs.image-name }}'
+            if [ -z "$image_name" ]; then
+              image_name='${{ github.event.repository.name }}'
+            fi
+            image_name=$(printf '%s' "$image_name" | tr '[:upper:]' '[:lower:]')
+            image_tag='${{ inputs.image-tag }}'
+            if [ -z "$image_tag" ]; then
+              image_tag='${{ github.sha }}'
+            fi
+            registry='${{ inputs.registry }}'
+            image_ref="${registry}/${{ github.repository_owner }}/$image_name:$image_tag"
+          else
+            registry="${image_ref%%/*}"
+          fi
+          echo "image-ref=$image_ref" >> "$GITHUB_OUTPUT"
+
       - name: Generate monitoring summary
         shell: bash
         run: |
@@ -233,7 +318,7 @@ jobs:
 
           echo "# Continuous Monitoring Summary"
           echo ""
-          echo "**Image**: ${{ inputs.image-ref }}"
+          echo "**Image**: ${{ steps.resolve-image.outputs.image-ref }}"
           echo "**URL**: ${{ inputs.monitoring-url }}"
           echo "**Report Time**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
           echo ""

@@ -119,6 +119,7 @@ Each consuming repository must complete these steps to use the CI/CD template.
       uses: DEBARPAN2000/CI-CD/.github/workflows/deploy-staging.yml@<tag-or-branch>
       with:
         environment-name: staging
+        registry: ghcr.io
         image-tag: latest
   ```
 - [ ] Create `call-dast-smoke.yml`
@@ -284,4 +285,3 @@ Each consuming repository must complete these steps to use the CI/CD template.
 | DAST scan skipped | Staging URL unreachable | Verify staging deployment health and WAF rules |
 | Version bump PR fails | Version file not found | Verify version file path in configuration |
 | Production approval blocked | Not in reviewer list | Add to environment reviewers |
-

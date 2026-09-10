@@ -54,7 +54,9 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: DEBARPAN2000/CI-CD/.github/workflows/deploy-staging.yml@main
     with:
-      image-ref: ${{ needs.build-docker.outputs.image-ref }}
+      registry: ghcr.io
+      image-name: my-python-app
+      image-tag: ${{ github.sha }}
       environment-name: staging
       compose-file: docker-compose.staging.yml
       compose-service: python-app
@@ -87,7 +89,9 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: DEBARPAN2000/CI-CD/.github/workflows/deploy-production.yml@main
     with:
-      image-ref: ${{ needs.build-docker.outputs.image-ref }}
+      registry: ghcr.io
+      image-name: my-python-app
+      image-tag: ${{ github.sha }}
       environment-name: production
       compose-file: docker-compose.yml
       compose-service: python-app
@@ -99,5 +103,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: DEBARPAN2000/CI-CD/.github/workflows/continuous-monitoring.yml@main
     with:
-      image-ref: ${{ needs.build-docker.outputs.image-ref }}
+      registry: ghcr.io
+      image-name: my-python-app
+      image-tag: ${{ github.sha }}
       monitoring-url: http://app:5000/health
