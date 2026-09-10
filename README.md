@@ -271,6 +271,8 @@ git push origin main
 - health-check-delay: '10'
 ```
 
+For non-GHCR registries, set `image-owner` when the repository path includes a namespace or owner segment; leave it empty only for top-level image paths.
+
 ### Version Bump (version-bump.yml)
 
 ```yaml
