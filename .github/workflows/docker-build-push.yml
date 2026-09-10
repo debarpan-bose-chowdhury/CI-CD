@@ -126,7 +126,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ github.token }}
       - name: Test GHCR package access
         if: ${{ inputs.registry == 'ghcr.io' }}
         shell: bash
