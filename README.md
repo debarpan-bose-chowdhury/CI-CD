@@ -236,7 +236,7 @@ git push origin main
 ```yaml
 - image-ref: ''                            # Optional full image reference override
 - registry: 'ghcr.io'                      # Used when image-ref is omitted
-- image-owner: ''                          # Defaults to github.repository_owner
+- image-owner: ''                          # Defaults to github.repository_owner for GHCR, omitted otherwise
 - image-name: ''                           # Defaults to repo name (lowercased)
 - image-tag: ''                            # Defaults to github.sha
 - environment-name: 'staging'
@@ -260,7 +260,7 @@ git push origin main
 ```yaml
 - image-ref: ''                            # Optional full image reference override
 - registry: 'ghcr.io'                      # Used when image-ref is omitted
-- image-owner: ''                          # Defaults to github.repository_owner
+- image-owner: ''                          # Defaults to github.repository_owner for GHCR, omitted otherwise
 - image-name: ''                           # Defaults to repo name (lowercased)
 - image-tag: ''                            # Defaults to github.sha
 - environment-name: 'production'
@@ -303,7 +303,7 @@ git push origin main
 ```yaml
 - image-ref: ''                            # Optional full image reference override
 - registry: 'ghcr.io'                      # Used when image-ref is omitted
-- image-owner: ''                          # Defaults to github.repository_owner
+- image-owner: ''                          # Defaults to github.repository_owner for GHCR, omitted otherwise
 - image-name: ''                           # Defaults to repo name (lowercased)
 - image-tag: ''                            # Defaults to github.sha
 - monitoring-url: 'http://localhost/health'
