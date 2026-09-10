@@ -60,13 +60,15 @@ jobs:
             if [ -z "$image_name" ]; then
               image_name='${{ github.event.repository.name }}'
             fi
-            image_name=$(printf '%s' "$image_name" | tr '[:upper:]' '[:lower:]')
             image_tag='${{ inputs.image-tag }}'
             if [ -z "$image_tag" ]; then
               image_tag='${{ github.sha }}'
             fi
             registry='${{ inputs.registry }}'
             registry=$(printf '%s' "$registry" | tr '[:upper:]' '[:lower:]')
+            if [ "$registry" = 'ghcr.io' ]; then
+              image_name=$(printf '%s' "$image_name" | tr '[:upper:]' '[:lower:]')
+            fi
             image_owner='${{ inputs.image-owner }}'
             if [ -z "$image_owner" ] && [ "$registry" = 'ghcr.io' ]; then
               image_owner='${{ github.repository_owner }}'

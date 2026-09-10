@@ -117,8 +117,12 @@ jobs:
           if [ -z "$image_name" ]; then
             image_name='${{ github.event.repository.name }}'
           fi
-          image_name=$(printf '%s' "$image_name" | tr '[:upper:]' '[:lower:]')
-          echo "image-ref=${{ inputs.registry }}/${{ github.repository_owner }}/$image_name:${{ inputs.image-tag }}" >> "$GITHUB_OUTPUT"
+          registry='${{ inputs.registry }}'
+          registry=$(printf '%s' "$registry" | tr '[:upper:]' '[:lower:]')
+          if [ "$registry" = 'ghcr.io' ]; then
+            image_name=$(printf '%s' "$image_name" | tr '[:upper:]' '[:lower:]')
+          fi
+          echo "image-ref=${registry}/${{ github.repository_owner }}/$image_name:${{ inputs.image-tag }}" >> "$GITHUB_OUTPUT"
           echo "image-name=$image_name" >> "$GITHUB_OUTPUT"
       - name: Login to GHCR
         if: ${{ inputs.registry == 'ghcr.io' }}

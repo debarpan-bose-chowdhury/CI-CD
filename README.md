@@ -237,7 +237,7 @@ git push origin main
 - image-ref: ''                            # Optional full image reference override
 - registry: 'ghcr.io'                      # Used when image-ref is omitted
 - image-owner: ''                          # Defaults to github.repository_owner for GHCR, omitted otherwise
-- image-name: ''                           # Defaults to repo name (lowercased)
+- image-name: ''                           # Defaults to repo name (lowercased for GHCR)
 - image-tag: ''                            # Defaults to github.sha
 - environment-name: 'staging'
 - compose-file: 'docker-compose.staging.yml'
@@ -261,7 +261,7 @@ git push origin main
 - image-ref: ''                            # Optional full image reference override
 - registry: 'ghcr.io'                      # Used when image-ref is omitted
 - image-owner: ''                          # Defaults to github.repository_owner for GHCR, omitted otherwise
-- image-name: ''                           # Defaults to repo name (lowercased)
+- image-name: ''                           # Defaults to repo name (lowercased for GHCR)
 - image-tag: ''                            # Defaults to github.sha
 - environment-name: 'production'
 - compose-file: 'docker-compose.yml'
@@ -304,7 +304,7 @@ git push origin main
 - image-ref: ''                            # Optional full image reference override
 - registry: 'ghcr.io'                      # Used when image-ref is omitted
 - image-owner: ''                          # Defaults to github.repository_owner for GHCR, omitted otherwise
-- image-name: ''                           # Defaults to repo name (lowercased)
+- image-name: ''                           # Defaults to repo name (lowercased for GHCR)
 - image-tag: ''                            # Defaults to github.sha
 - monitoring-url: 'http://localhost/health'
 - check-interval: '60'                     # seconds
