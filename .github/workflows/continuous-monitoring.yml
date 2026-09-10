@@ -5,7 +5,19 @@ on:
     inputs:
       image-ref:
         type: string
-        required: true
+        default: ''
+      registry:
+        type: string
+        default: ghcr.io
+      image-owner:
+        type: string
+        default: ''
+      image-name:
+        type: string
+        default: ''
+      image-tag:
+        type: string
+        default: ''
       monitoring-url:
         type: string
         default: 'http://localhost/health'
@@ -34,6 +46,45 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
+      - name: Resolve image reference
+        id: resolve-image
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_ref='${{ inputs.image-ref }}'
+          if [ -z "$image_ref" ]; then
+            image_name='${{ inputs.image-name }}'
+            if [ -z "$image_name" ]; then
+              image_name='${{ github.event.repository.name }}'
+            fi
+            image_tag='${{ inputs.image-tag }}'
+            if [ -z "$image_tag" ]; then
+              image_tag='${{ github.sha }}'
+            fi
+            registry='${{ inputs.registry }}'
+            registry=$(printf '%s' "$registry" | tr '[:upper:]' '[:lower:]')
+            if [ "$registry" = 'ghcr.io' ]; then
+              image_name=$(printf '%s' "$image_name" | tr '[:upper:]' '[:lower:]')
+            fi
+            image_owner='${{ inputs.image-owner }}'
+            if [ -z "$image_owner" ] && [ "$registry" = 'ghcr.io' ]; then
+              image_owner='${{ github.repository_owner }}'
+            fi
+            if [ "$registry" = 'ghcr.io' ]; then
+              image_owner=$(printf '%s' "$image_owner" | tr '[:upper:]' '[:lower:]')
+            fi
+            image_path="$image_name"
+            if [ -n "$image_owner" ]; then
+              image_path="${image_owner}/$image_name"
+            fi
+            image_ref="${registry}/${image_path}:$image_tag"
+          else
+            registry="${image_ref%%/*}"
+            registry=$(printf '%s' "$registry" | tr '[:upper:]' '[:lower:]')
+          fi
+          echo "image-ref=$image_ref" >> "$GITHUB_OUTPUT"
+          echo "registry=$registry" >> "$GITHUB_OUTPUT"
+
       - name: Perform health checks
         id: health
         shell: bash
@@ -60,7 +111,7 @@ jobs:
               status='✓'
             else
               status='✗'
-              ((failed_checks++))
+              failed_checks=$((failed_checks + 1))
             fi
 
             echo "[$timestamp] Check $i/$max_checks: HTTP $response_code | ${response_time}s | $status"
@@ -83,7 +134,7 @@ jobs:
           cat > monitoring-report.md << 'EOF'
           # Runtime Monitoring Report
 
-          **Image**: ${{ inputs.image-ref }}
+          **Image**: ${{ steps.resolve-image.outputs.image-ref }}
           **URL**: ${{ inputs.monitoring-url }}
           **Timestamp**: $(date -u +'%Y-%m-%dT%H:%M:%SZ')
 
@@ -124,11 +175,51 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
-      - name: Verify image metadata
+      - name: Resolve image reference
+        id: resolve-image
         shell: bash
         run: |
           set -euo pipefail
           image_ref='${{ inputs.image-ref }}'
+          if [ -z "$image_ref" ]; then
+            image_name='${{ inputs.image-name }}'
+            if [ -z "$image_name" ]; then
+              image_name='${{ github.event.repository.name }}'
+            fi
+            image_tag='${{ inputs.image-tag }}'
+            if [ -z "$image_tag" ]; then
+              image_tag='${{ github.sha }}'
+            fi
+            registry='${{ inputs.registry }}'
+            registry=$(printf '%s' "$registry" | tr '[:upper:]' '[:lower:]')
+            image_name=$(printf '%s' "$image_name" | tr '[:upper:]' '[:lower:]')
+            image_owner='${{ inputs.image-owner }}'
+            if [ -z "$image_owner" ] && [ "$registry" = 'ghcr.io' ]; then
+              image_owner='${{ github.repository_owner }}'
+            fi
+            image_owner=$(printf '%s' "$image_owner" | tr '[:upper:]' '[:lower:]')
+            image_path="$image_name"
+            if [ -n "$image_owner" ]; then
+              image_path="${image_owner}/$image_name"
+            fi
+            image_ref="${registry}/${image_path}:$image_tag"
+          else
+            registry="${image_ref%%/*}"
+            registry=$(printf '%s' "$registry" | tr '[:upper:]' '[:lower:]')
+          fi
+          echo "image-ref=$image_ref" >> "$GITHUB_OUTPUT"
+          echo "registry=$registry" >> "$GITHUB_OUTPUT"
+
+      - name: Login to GHCR (for private images)
+        if: ${{ steps.resolve-image.outputs.registry == 'ghcr.io' }}
+        shell: bash
+        run: echo '${{ github.token }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+
+      - name: Verify image metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_ref='${{ steps.resolve-image.outputs.image-ref }}'
 
           echo "Checking container compliance..."
           echo "Image: $image_ref"
@@ -226,6 +317,46 @@ jobs:
     if: always()
     name: Monitoring Summary
     steps:
+      - name: Resolve image reference
+        id: resolve-image
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_ref='${{ inputs.image-ref }}'
+          if [ -z "$image_ref" ]; then
+            image_name='${{ inputs.image-name }}'
+            if [ -z "$image_name" ]; then
+              image_name='${{ github.event.repository.name }}'
+            fi
+            image_tag='${{ inputs.image-tag }}'
+            if [ -z "$image_tag" ]; then
+              image_tag='${{ github.sha }}'
+            fi
+            registry='${{ inputs.registry }}'
+            registry=$(printf '%s' "$registry" | tr '[:upper:]' '[:lower:]')
+            if [ "$registry" = 'ghcr.io' ]; then
+              image_name=$(printf '%s' "$image_name" | tr '[:upper:]' '[:lower:]')
+            fi
+            image_owner='${{ inputs.image-owner }}'
+            if [ -z "$image_owner" ] && [ "$registry" = 'ghcr.io' ]; then
+              image_owner='${{ github.repository_owner }}'
+            fi
+            if [ "$registry" = 'ghcr.io' ]; then
+              image_owner=$(printf '%s' "$image_owner" | tr '[:upper:]' '[:lower:]')
+            fi
+            image_name=$(printf '%s' "$image_name" | tr '[:upper:]' '[:lower:]')
+            image_owner=$(printf '%s' "$image_owner" | tr '[:upper:]' '[:lower:]')
+            image_path="$image_name"
+            if [ -n "$image_owner" ]; then
+              image_path="${image_owner}/$image_name"
+            fi
+            image_ref="${registry}/${image_path}:$image_tag"
+          else
+            registry="${image_ref%%/*}"
+            registry=$(printf '%s' "$registry" | tr '[:upper:]' '[:lower:]')
+          fi
+          echo "image-ref=$image_ref" >> "$GITHUB_OUTPUT"
+
       - name: Generate monitoring summary
         shell: bash
         run: |
@@ -233,7 +364,7 @@ jobs:
 
           echo "# Continuous Monitoring Summary"
           echo ""
-          echo "**Image**: ${{ inputs.image-ref }}"
+          echo "**Image**: ${{ steps.resolve-image.outputs.image-ref }}"
           echo "**URL**: ${{ inputs.monitoring-url }}"
           echo "**Report Time**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
           echo ""

@@ -5,7 +5,19 @@ on:
     inputs:
       image-ref:
         type: string
-        required: true
+        default: ''
+      registry:
+        type: string
+        default: ghcr.io
+      image-owner:
+        type: string
+        default: ''
+      image-name:
+        type: string
+        default: ''
+      image-tag:
+        type: string
+        default: ''
       environment-name:
         type: string
         default: production
@@ -35,8 +47,49 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
+      - name: Resolve image reference
+        id: resolve-image
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_ref='${{ inputs.image-ref }}'
+          if [ -z "$image_ref" ]; then
+            image_name='${{ inputs.image-name }}'
+            if [ -z "$image_name" ]; then
+              image_name='${{ github.event.repository.name }}'
+            fi
+            image_tag='${{ inputs.image-tag }}'
+            if [ -z "$image_tag" ]; then
+              image_tag='${{ github.sha }}'
+            fi
+            registry='${{ inputs.registry }}'
+            registry=$(printf '%s' "$registry" | tr '[:upper:]' '[:lower:]')
+            if [ "$registry" = 'ghcr.io' ]; then
+              image_name=$(printf '%s' "$image_name" | tr '[:upper:]' '[:lower:]')
+            fi
+            image_owner='${{ inputs.image-owner }}'
+            if [ -z "$image_owner" ] && [ "$registry" = 'ghcr.io' ]; then
+              image_owner='${{ github.repository_owner }}'
+            fi
+            if [ "$registry" = 'ghcr.io' ]; then
+              image_owner=$(printf '%s' "$image_owner" | tr '[:upper:]' '[:lower:]')
+            fi
+            image_name=$(printf '%s' "$image_name" | tr '[:upper:]' '[:lower:]')
+            image_owner=$(printf '%s' "$image_owner" | tr '[:upper:]' '[:lower:]')
+            image_path="$image_name"
+            if [ -n "$image_owner" ]; then
+              image_path="${image_owner}/$image_name"
+            fi
+            image_ref="${registry}/${image_path}:$image_tag"
+          else
+            registry="${image_ref%%/*}"
+            registry=$(printf '%s' "$registry" | tr '[:upper:]' '[:lower:]')
+          fi
+          echo "image-ref=$image_ref" >> "$GITHUB_OUTPUT"
+          echo "registry=$registry" >> "$GITHUB_OUTPUT"
+
       - name: Login to GHCR (for private images)
-        if: ${{ startsWith(inputs.image-ref, 'ghcr.io/') }}
+        if: ${{ steps.resolve-image.outputs.registry == 'ghcr.io' }}
         shell: bash
         run: echo '${{ github.token }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
 
@@ -44,7 +97,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          image_ref='${{ inputs.image-ref }}'
+          image_ref='${{ steps.resolve-image.outputs.image-ref }}'
           echo "Verifying image: ${image_ref}"
 
           # Use docker to check if image exists
@@ -68,24 +121,70 @@ jobs:
     needs: pre-deploy-check
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       deployments: write
+      packages: read
     environment: ${{ inputs.environment-name }}
     name: Deploy to Production
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
+      - name: Resolve image reference
+        id: resolve-image
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_ref='${{ inputs.image-ref }}'
+          if [ -z "$image_ref" ]; then
+            image_name='${{ inputs.image-name }}'
+            if [ -z "$image_name" ]; then
+              image_name='${{ github.event.repository.name }}'
+            fi
+            image_tag='${{ inputs.image-tag }}'
+            if [ -z "$image_tag" ]; then
+              image_tag='${{ github.sha }}'
+            fi
+            registry='${{ inputs.registry }}'
+            registry=$(printf '%s' "$registry" | tr '[:upper:]' '[:lower:]')
+            if [ "$registry" = 'ghcr.io' ]; then
+              image_name=$(printf '%s' "$image_name" | tr '[:upper:]' '[:lower:]')
+            fi
+            image_owner='${{ inputs.image-owner }}'
+            if [ -z "$image_owner" ] && [ "$registry" = 'ghcr.io' ]; then
+              image_owner='${{ github.repository_owner }}'
+            fi
+            if [ "$registry" = 'ghcr.io' ]; then
+              image_owner=$(printf '%s' "$image_owner" | tr '[:upper:]' '[:lower:]')
+            fi
+            image_path="$image_name"
+            if [ -n "$image_owner" ]; then
+              image_path="${image_owner}/$image_name"
+            fi
+            image_ref="${registry}/${image_path}:$image_tag"
+          else
+            registry="${image_ref%%/*}"
+            registry=$(printf '%s' "$registry" | tr '[:upper:]' '[:lower:]')
+          fi
+          echo "image-ref=$image_ref" >> "$GITHUB_OUTPUT"
+          echo "registry=$registry" >> "$GITHUB_OUTPUT"
+
+      - name: Login to GHCR (for private images)
+        if: ${{ steps.resolve-image.outputs.registry == 'ghcr.io' }}
+        shell: bash
+        run: echo '${{ github.token }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+
       - name: Create deployment record
         shell: bash
         run: |
           echo "Deployment initiated at: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-          echo "Image: ${{ inputs.image-ref }}"
+          echo "Image: ${{ steps.resolve-image.outputs.image-ref }}"
           echo "Environment: ${{ inputs.environment-name }}"
 
       - name: Pull image
         shell: bash
         run: |
           set -euo pipefail
-          docker pull '${{ inputs.image-ref }}'
+          docker pull '${{ steps.resolve-image.outputs.image-ref }}'
           echo "✓ Image pulled successfully"
 
       - name: Backup current deployment
@@ -111,7 +210,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          export IMAGE_REF='${{ inputs.image-ref }}'
+          export IMAGE_REF='${{ steps.resolve-image.outputs.image-ref }}'
           compose_file='${{ inputs.compose-file }}'
           compose_service='${{ inputs.compose-service }}'
 
@@ -145,7 +244,7 @@ jobs:
           echo "✗ Health check failed after ${max_retries} attempts" >&2
           echo ""
           echo "Application logs:"
-          docker-compose -f '${{ inputs.compose-file }}' logs '${{ inputs.compose-service }}' || true
+          docker compose -f '${{ inputs.compose-file }}' logs '${{ inputs.compose-service }}' || true
           exit 1
 
       - name: Run smoke tests
@@ -170,10 +269,10 @@ jobs:
       - name: Post-deployment verification
         shell: bash
         run: |
-          docker-compose -f '${{ inputs.compose-file }}' ps
+          docker compose -f '${{ inputs.compose-file }}' ps
           echo ""
           echo "✓ Production deployment successful"
-          echo "  Image: ${{ inputs.image-ref }}"
+          echo "  Image: ${{ steps.resolve-image.outputs.image-ref }}"
           echo "  Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
 
       - name: Rollback on failure

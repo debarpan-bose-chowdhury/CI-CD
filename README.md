@@ -223,6 +223,7 @@ git push origin main
 ```yaml
 - language: 'auto' | 'dotnet' | 'python'
 - registry: 'ghcr.io'                      # Container registry
+- image-owner: ''                          # Defaults to github.repository_owner for GHCR, omitted otherwise
 - image-name: 'my-app'                     # Image name (repo name if empty)
 - image-tag: 'latest'                      # Image tag
 - build-context: '.'                       # Docker build context
@@ -234,7 +235,11 @@ git push origin main
 ### Deploy Staging (deploy-staging.yml)
 
 ```yaml
-- image-ref: (required)                    # Full image reference
+- image-ref: ''                            # Optional full image reference override
+- registry: 'ghcr.io'                      # Used when image-ref is omitted
+- image-owner: ''                          # Defaults to github.repository_owner for GHCR, omitted otherwise
+- image-name: ''                           # Defaults to repo name (lowercased for GHCR)
+- image-tag: ''                            # Defaults to github.sha
 - environment-name: 'staging'
 - compose-file: 'docker-compose.staging.yml'
 - compose-service: 'app'
@@ -253,7 +258,21 @@ git push origin main
 
 ### Deploy Production (deploy-production.yml)
 
-Same as staging (use production environment credentials).
+```yaml
+- image-ref: ''                            # Optional full image reference override
+- registry: 'ghcr.io'                      # Used when image-ref is omitted
+- image-owner: ''                          # Defaults to github.repository_owner for GHCR, omitted otherwise
+- image-name: ''                           # Defaults to repo name (lowercased for GHCR)
+- image-tag: ''                            # Defaults to github.sha
+- environment-name: 'production'
+- compose-file: 'docker-compose.yml'
+- compose-service: 'app'
+- health-check-url: 'http://localhost/health'
+- health-check-max-retries: '30'
+- health-check-delay: '10'
+```
+
+For non-GHCR registries, set `image-owner` when the repository path includes a namespace or owner segment; leave it empty only for top-level image paths.
 
 ### Version Bump (version-bump.yml)
 
@@ -285,7 +304,11 @@ Same as staging (use production environment credentials).
 ### Continuous Monitoring (continuous-monitoring.yml)
 
 ```yaml
-- image-ref: (required)
+- image-ref: ''                            # Optional full image reference override
+- registry: 'ghcr.io'                      # Used when image-ref is omitted
+- image-owner: ''                          # Defaults to github.repository_owner for GHCR, omitted otherwise
+- image-name: ''                           # Defaults to repo name (lowercased for GHCR)
+- image-tag: ''                            # Defaults to github.sha
 - monitoring-url: 'http://localhost/health'
 - check-interval: '60'                     # seconds
 - max-checks: '3'

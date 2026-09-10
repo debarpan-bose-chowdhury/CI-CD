@@ -101,7 +101,8 @@ Each consuming repository must complete these steps to use the CI/CD template.
     call-docker:
       uses: DEBARPAN2000/CI-CD/.github/workflows/docker-build-push.yml@<tag-or-branch>
       with:
-        image-name: ${{ github.repository }}
+        image-owner: ${{ github.repository_owner }}
+        image-name: ${{ github.event.repository.name }}
         registry: ghcr.io
       secrets:
         registry-username: ${{ secrets.REGISTRY_USERNAME }}
@@ -119,6 +120,9 @@ Each consuming repository must complete these steps to use the CI/CD template.
       uses: DEBARPAN2000/CI-CD/.github/workflows/deploy-staging.yml@<tag-or-branch>
       with:
         environment-name: staging
+        registry: ghcr.io
+        image-owner: ${{ github.repository_owner }}
+        image-name: ${{ github.event.repository.name }}
         image-tag: latest
   ```
 - [ ] Create `call-dast-smoke.yml`
@@ -284,4 +288,3 @@ Each consuming repository must complete these steps to use the CI/CD template.
 | DAST scan skipped | Staging URL unreachable | Verify staging deployment health and WAF rules |
 | Version bump PR fails | Version file not found | Verify version file path in configuration |
 | Production approval blocked | Not in reviewer list | Add to environment reviewers |
-
