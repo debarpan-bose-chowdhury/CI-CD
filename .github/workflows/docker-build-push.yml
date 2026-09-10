@@ -9,6 +9,9 @@ on:
       registry:
         type: string
         default: ghcr.io
+      image-owner:
+        type: string
+        default: ''
       image-name:
         type: string
         default: ''
@@ -119,10 +122,20 @@ jobs:
           fi
           registry='${{ inputs.registry }}'
           registry=$(printf '%s' "$registry" | tr '[:upper:]' '[:lower:]')
+          image_owner='${{ inputs.image-owner }}'
+          if [ -z "$image_owner" ] && [ "$registry" = 'ghcr.io' ]; then
+            image_owner='${{ github.repository_owner }}'
+          fi
           if [ "$registry" = 'ghcr.io' ]; then
             image_name=$(printf '%s' "$image_name" | tr '[:upper:]' '[:lower:]')
+            image_owner=$(printf '%s' "$image_owner" | tr '[:upper:]' '[:lower:]')
           fi
-          echo "image-ref=${registry}/${{ github.repository_owner }}/$image_name:${{ inputs.image-tag }}" >> "$GITHUB_OUTPUT"
+          image_path="$image_name"
+          if [ -n "$image_owner" ]; then
+            image_path="${image_owner}/$image_name"
+          fi
+          echo "image-base=${registry}/$image_path" >> "$GITHUB_OUTPUT"
+          echo "image-ref=${registry}/$image_path:${{ inputs.image-tag }}" >> "$GITHUB_OUTPUT"
           echo "image-name=$image_name" >> "$GITHUB_OUTPUT"
       - name: Login to GHCR
         if: ${{ inputs.registry == 'ghcr.io' }}
@@ -152,12 +165,12 @@ jobs:
           push: true
           tags: |
             ${{ steps.meta.outputs.image-ref }}
-            ${{ inputs.registry }}/${{ github.repository_owner }}/${{ steps.meta.outputs.image-name }}:latest
+            ${{ steps.meta.outputs.image-base }}:latest
           provenance: true
           sbom: true
           platforms: linux/amd64,linux/arm64
           build-args: |
             DOTNET_VERSION=${{ inputs.dotnet-version }}
             PYTHON_VERSION=${{ inputs.python-version }}
-          cache-from: type=registry,ref=${{ inputs.registry }}/${{ github.repository_owner }}/${{ steps.meta.outputs.image-name }}:buildcache
-          cache-to: type=registry,ref=${{ inputs.registry }}/${{ github.repository_owner }}/${{ steps.meta.outputs.image-name }}:buildcache,mode=max
+          cache-from: type=registry,ref=${{ steps.meta.outputs.image-base }}:buildcache
+          cache-to: type=registry,ref=${{ steps.meta.outputs.image-base }}:buildcache,mode=max

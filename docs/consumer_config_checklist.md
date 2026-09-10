@@ -101,7 +101,8 @@ Each consuming repository must complete these steps to use the CI/CD template.
     call-docker:
       uses: DEBARPAN2000/CI-CD/.github/workflows/docker-build-push.yml@<tag-or-branch>
       with:
-        image-name: ${{ github.repository }}
+        image-owner: ${{ github.repository_owner }}
+        image-name: ${{ github.event.repository.name }}
         registry: ghcr.io
       secrets:
         registry-username: ${{ secrets.REGISTRY_USERNAME }}

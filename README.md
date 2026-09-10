@@ -223,6 +223,7 @@ git push origin main
 ```yaml
 - language: 'auto' | 'dotnet' | 'python'
 - registry: 'ghcr.io'                      # Container registry
+- image-owner: ''                          # Defaults to github.repository_owner for GHCR, omitted otherwise
 - image-name: 'my-app'                     # Image name (repo name if empty)
 - image-tag: 'latest'                      # Image tag
 - build-context: '.'                       # Docker build context

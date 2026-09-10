@@ -40,6 +40,7 @@ jobs:
     with:
       language: python
       registry: ghcr.io
+      image-owner: ${{ github.repository_owner }}
       image-name: my-python-app
       image-tag: ${{ github.sha }}
       build-context: .

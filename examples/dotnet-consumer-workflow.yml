@@ -37,6 +37,7 @@ jobs:
     with:
       language: dotnet
       registry: ghcr.io
+      image-owner: ${{ github.repository_owner }}
       image-name: my-dotnet-app
       image-tag: ${{ github.sha }}
       build-context: .
