@@ -121,6 +121,7 @@ jobs:
     needs: pre-deploy-check
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       deployments: write
       packages: read
     environment: ${{ inputs.environment-name }}
