@@ -66,6 +66,7 @@ jobs:
               image_tag='${{ github.sha }}'
             fi
             registry='${{ inputs.registry }}'
+            registry=$(printf '%s' "$registry" | tr '[:upper:]' '[:lower:]')
             image_owner='${{ inputs.image-owner }}'
             if [ -z "$image_owner" ] && [ "$registry" = 'ghcr.io' ]; then
               image_owner='${{ github.repository_owner }}'
@@ -80,6 +81,7 @@ jobs:
             image_ref="${registry}/${image_path}:$image_tag"
           else
             registry="${image_ref%%/*}"
+            registry=$(printf '%s' "$registry" | tr '[:upper:]' '[:lower:]')
           fi
           echo "image-ref=$image_ref" >> "$GITHUB_OUTPUT"
           echo "registry=$registry" >> "$GITHUB_OUTPUT"
