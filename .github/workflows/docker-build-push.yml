@@ -126,10 +126,8 @@ jobs:
           if [ -z "$image_owner" ] && [ "$registry" = 'ghcr.io' ]; then
             image_owner='${{ github.repository_owner }}'
           fi
-          if [ "$registry" = 'ghcr.io' ]; then
-            image_name=$(printf '%s' "$image_name" | tr '[:upper:]' '[:lower:]')
-            image_owner=$(printf '%s' "$image_owner" | tr '[:upper:]' '[:lower:]')
-          fi
+image_name=$(printf '%s' "$image_name" | tr '[:upper:]' '[:lower:]')
+image_owner=$(printf '%s' "$image_owner" | tr '[:upper:]' '[:lower:]')
           image_path="$image_name"
           if [ -n "$image_owner" ]; then
             image_path="${image_owner}/$image_name"
