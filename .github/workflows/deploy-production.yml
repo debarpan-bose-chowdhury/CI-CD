@@ -68,6 +68,9 @@ jobs:
             if [ -z "$image_owner" ]; then
               image_owner='${{ github.repository_owner }}'
             fi
+            if [ "$registry" = 'ghcr.io' ]; then
+              image_owner=$(printf '%s' "$image_owner" | tr '[:upper:]' '[:lower:]')
+            fi
             image_ref="${registry}/${image_owner}/$image_name:$image_tag"
           else
             registry="${image_ref%%/*}"
@@ -134,6 +137,9 @@ jobs:
             image_owner='${{ inputs.image-owner }}'
             if [ -z "$image_owner" ]; then
               image_owner='${{ github.repository_owner }}'
+            fi
+            if [ "$registry" = 'ghcr.io' ]; then
+              image_owner=$(printf '%s' "$image_owner" | tr '[:upper:]' '[:lower:]')
             fi
             image_ref="${registry}/${image_owner}/$image_name:$image_tag"
           else
