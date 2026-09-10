@@ -120,6 +120,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       deployments: write
+      packages: read
     environment: ${{ inputs.environment-name }}
     name: Deploy to Production
     steps:
