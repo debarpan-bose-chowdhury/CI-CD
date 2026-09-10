@@ -53,6 +53,7 @@ jobs:
     uses: DEBARPAN2000/CI-CD/.github/workflows/deploy-staging.yml@main
     with:
       registry: ghcr.io
+      image-owner: ${{ github.repository_owner }}
       image-name: my-dotnet-app
       image-tag: ${{ github.sha }}
       environment-name: staging
@@ -88,6 +89,7 @@ jobs:
     uses: DEBARPAN2000/CI-CD/.github/workflows/deploy-production.yml@main
     with:
       registry: ghcr.io
+      image-owner: ${{ github.repository_owner }}
       image-name: my-dotnet-app
       image-tag: ${{ github.sha }}
       environment-name: production
@@ -102,6 +104,7 @@ jobs:
     uses: DEBARPAN2000/CI-CD/.github/workflows/continuous-monitoring.yml@main
     with:
       registry: ghcr.io
+      image-owner: ${{ github.repository_owner }}
       image-name: my-dotnet-app
       image-tag: ${{ github.sha }}
       monitoring-url: http://app:8080/health

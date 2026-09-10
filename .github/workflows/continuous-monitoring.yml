@@ -9,6 +9,9 @@ on:
       registry:
         type: string
         default: ghcr.io
+      image-owner:
+        type: string
+        default: ''
       image-name:
         type: string
         default: ''
@@ -60,7 +63,11 @@ jobs:
               image_tag='${{ github.sha }}'
             fi
             registry='${{ inputs.registry }}'
-            image_ref="${registry}/${{ github.repository_owner }}/$image_name:$image_tag"
+            image_owner='${{ inputs.image-owner }}'
+            if [ -z "$image_owner" ]; then
+              image_owner='${{ github.repository_owner }}'
+            fi
+            image_ref="${registry}/${image_owner}/$image_name:$image_tag"
           else
             registry="${image_ref%%/*}"
           fi
@@ -174,7 +181,11 @@ jobs:
               image_tag='${{ github.sha }}'
             fi
             registry='${{ inputs.registry }}'
-            image_ref="${registry}/${{ github.repository_owner }}/$image_name:$image_tag"
+            image_owner='${{ inputs.image-owner }}'
+            if [ -z "$image_owner" ]; then
+              image_owner='${{ github.repository_owner }}'
+            fi
+            image_ref="${registry}/${image_owner}/$image_name:$image_tag"
           else
             registry="${image_ref%%/*}"
           fi
@@ -305,7 +316,11 @@ jobs:
               image_tag='${{ github.sha }}'
             fi
             registry='${{ inputs.registry }}'
-            image_ref="${registry}/${{ github.repository_owner }}/$image_name:$image_tag"
+            image_owner='${{ inputs.image-owner }}'
+            if [ -z "$image_owner" ]; then
+              image_owner='${{ github.repository_owner }}'
+            fi
+            image_ref="${registry}/${image_owner}/$image_name:$image_tag"
           else
             registry="${image_ref%%/*}"
           fi

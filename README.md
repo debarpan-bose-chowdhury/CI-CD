@@ -236,6 +236,7 @@ git push origin main
 ```yaml
 - image-ref: ''                            # Optional full image reference override
 - registry: 'ghcr.io'                      # Used when image-ref is omitted
+- image-owner: ''                          # Defaults to github.repository_owner
 - image-name: ''                           # Defaults to repo name (lowercased)
 - image-tag: ''                            # Defaults to github.sha
 - environment-name: 'staging'
@@ -290,6 +291,7 @@ Same as staging (use production environment credentials).
 ```yaml
 - image-ref: ''                            # Optional full image reference override
 - registry: 'ghcr.io'                      # Used when image-ref is omitted
+- image-owner: ''                          # Defaults to github.repository_owner
 - image-name: ''                           # Defaults to repo name (lowercased)
 - image-tag: ''                            # Defaults to github.sha
 - monitoring-url: 'http://localhost/health'
