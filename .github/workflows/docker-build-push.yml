@@ -29,9 +29,9 @@ on:
         default: '3.12'
     secrets:
       REGISTRY_USERNAME:
-        required: false
+        required: true
       REGISTRY_PASSWORD:
-        required: false
+        required: true
     outputs:
       image-ref:
         value: ${{ jobs.build.outputs.image-ref }}
