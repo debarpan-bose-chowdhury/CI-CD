@@ -257,7 +257,19 @@ git push origin main
 
 ### Deploy Production (deploy-production.yml)
 
-Same as staging (use production environment credentials).
+```yaml
+- image-ref: ''                            # Optional full image reference override
+- registry: 'ghcr.io'                      # Used when image-ref is omitted
+- image-owner: ''                          # Defaults to github.repository_owner
+- image-name: ''                           # Defaults to repo name (lowercased)
+- image-tag: ''                            # Defaults to github.sha
+- environment-name: 'production'
+- compose-file: 'docker-compose.yml'
+- compose-service: 'app'
+- health-check-url: 'http://localhost/health'
+- health-check-max-retries: '30'
+- health-check-delay: '10'
+```
 
 ### Version Bump (version-bump.yml)
 

@@ -121,6 +121,7 @@ Each consuming repository must complete these steps to use the CI/CD template.
         environment-name: staging
         registry: ghcr.io
         image-owner: ${{ github.repository_owner }}
+        image-name: ${{ github.repository }}
         image-tag: latest
   ```
 - [ ] Create `call-dast-smoke.yml`
